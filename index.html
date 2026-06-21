@@ -145,7 +145,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v09</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v10</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -197,10 +197,10 @@
 /* ============================================================
    HANUM LAUNDRY — v04 (Tahap 1)
    ============================================================ */
-const SB_URL_DEFAULT = "";
-const SB_KEY_DEFAULT = "";
+const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
+const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v09";
+const APP_VERSION = "v10";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -284,7 +284,7 @@ async function init(){
   try{ sb=supabase.createClient(cfg.url,cfg.key); }catch(e){ showSetup('Koneksi gagal: '+(e.message||e)); return; }
   try{
     const { data:{ session } } = await sb.auth.getSession();
-    if(session){ await afterLogin(session.user); } else { showLoginView(); }
+    if(session){ await afterLogin(session.user); } else { showLoginView(); try{ if(new URLSearchParams(location.search).has('daftar')) showRegister(); }catch(e){} }
   }catch(e){ showSetup('Tidak bisa menghubungi database. Cek URL & KUNCI. ('+(e.message||e)+')'); }
 }
 
@@ -390,7 +390,7 @@ async function renderDashboard(){
   const icoBox=(c,bg)=>`<span class="ico" style="background:${bg};color:${c}">`;
   m.innerHTML = topbar('Dashboard', `<button class="btn" onclick="nav('pos')">+ Order Baru</button>`)
    + `<div class="stats">
-        <div class="card stat">${icoBox('#15803d','#dcfce7')}💰</span><div class="lbl">Omzet hari ini</div><div class="big">${rp(omzetHari)}</div></div>
+        <div class="card stat" style="cursor:pointer" onclick="openPeriode('hari')">${icoBox('#15803d','#dcfce7')}💰</span><div class="lbl">Omzet hari ini ›</div><div class="big">${rp(omzetHari)}</div></div>
         <div class="card stat" style="cursor:pointer" onclick="openPeriode('bulan')">${icoBox('#6d28d9','#ede9fe')}🗓️</span><div class="lbl">Omzet bulan ini ›</div><div class="big">${rp(omzetBulan)}</div></div>
         <div class="card stat" style="cursor:pointer" onclick="openPeriode('tahun')">${icoBox('#b45309','#fef3c7')}📈</span><div class="lbl">Omzet tahun ini ›</div><div class="big">${rp(omzetTahun)}</div></div>
       </div>
@@ -640,10 +640,10 @@ async function openOrder(id){
   const canSelesai=p.status==='proses', canCancel=p.status==='proses';
   const logHTML=(logs||[]).map(l=>`<div class="muted" style="font-size:12px">${new Date(l.created_at).toLocaleString('id-ID')} — ${esc(STATUS[l.status]?.label||l.status)} oleh ${esc(l.oleh||'-')}</div>`).join('');
   const showWA=(ds==='siap'||ds==='selesai');
-  const waMsg=`Halo ${p.pelanggan_nama},\n\nLaundry Anda telah selesai dan siap diambil.\n\nNomor Nota:\n${p.nomor_invoice}\n\nCek status & nota online di:\n${SITE_URL}\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏`;
+  const waMsg=`Halo ${p.pelanggan_nama},\n\nLaundry Anda telah selesai dan siap diambil.\n\nNomor Nota:\n${p.nomor_invoice}\n\nCek status & nota online di:\n${SITE_URL}/?daftar=1\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏`;
   let notaMsg='*HANUM LAUNDRY*\nNota: '+p.nomor_invoice+'\nKode lacak: '+(p.kode_tracking||'-')+'\nNama: '+p.pelanggan_nama+'\n\nRincian:\n';
   (items||[]).forEach(it=>{ notaMsg+='- '+it.nama_layanan+' '+it.qty+it.satuan+' = '+rp(it.subtotal)+'\n'; });
-  notaMsg+='\nSubtotal: '+rp(p.subtotal)+'\nDiskon: '+rp(p.diskon)+'\nTotal: '+rp(p.total)+'\nStatus bayar: '+(p.status_bayar==='lunas'?'Lunas ('+p.metode_bayar+')':'Belum bayar')+'\nStatus: '+(STATUS[ds]?.label||ds)+'\nEstimasi selesai: '+fmtDue(p)+'\n\nCek status & nota online di:\n'+SITE_URL+'\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏';
+  notaMsg+='\nSubtotal: '+rp(p.subtotal)+'\nDiskon: '+rp(p.diskon)+'\nTotal: '+rp(p.total)+'\nStatus bayar: '+(p.status_bayar==='lunas'?'Lunas ('+p.metode_bayar+')':'Belum bayar')+'\nStatus: '+(STATUS[ds]?.label||ds)+'\nEstimasi selesai: '+fmtDue(p)+'\n\nCek status & nota online di:\n'+SITE_URL+'/?daftar=1'+'\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏';
   openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">${esc(p.pelanggan_nama||'-')} · Lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div><div>${statusPill(ds)}</div></div>
     ${stepHTML?`<div class="steps">${stepHTML}</div>`:''}
     <div style="margin:8px 0">${itemRows||'<span class="muted">—</span>'}</div>
@@ -716,7 +716,7 @@ function expPill(s){ const o=EXP_STATUS[s]||{label:s,color:'#64748b',bg:'#e2e8f0
 async function renderExpenses(){
   if(!isStaff()){ toast('Khusus owner/admin.'); nav('dashboard'); return; }
   const _seq=state.navSeq;
-  $('main').innerHTML = topbar('Pengeluaran Operasional', `${isOwner()?`<button class="btn sec" onclick="expManageCats()">⚙️ Kategori</button>`:''}<button class="btn sec" onclick="printExpenses()">🖨️ Cetak</button><button class="btn" onclick="expForm()">+ Pengeluaran</button>`)
+  $('main').innerHTML = topbar('Pengeluaran Operasional', `${isOwner()?`<button class="btn sec" onclick="expManageCats()">⚙️ Kategori</button>`:''}<button class="btn sec" onclick="openLaciView()">💸 Laci</button><button class="btn sec" onclick="printExpenses()">🖨️ Cetak</button><button class="btn" onclick="expForm()">+ Pengeluaran</button>`)
     + `<p class="muted" style="margin:-6px 0 12px">Catat semua biaya operasional. Otomatis masuk ke Dashboard & Laporan. Ketuk kartu untuk pilih tanggal/bulan.</p>
        <div id="exp-sum" class="stats" style="margin-bottom:12px"><div class="skel" style="height:96px"></div><div class="skel" style="height:96px"></div></div>
        <div class="card" style="margin-bottom:12px"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-calc-body',this)"><h3 style="margin:0">🧮 Kalkulator (catatan di kertas)</h3><span class="collapse-ic">▸</span></div><div id="exp-calc-body" style="display:none"></div></div>
@@ -898,7 +898,25 @@ function printExpenses(){
   setTimeout(()=>window.print(),200);
 }
 
-/* ============================================================ PELANGGAN ============================================================ */
+/* ----- popup khusus: uang keluar dari laci (kas) ----- */
+function openLaciView(){
+  const d=new Date(); const first=new Date(d.getFullYear(),d.getMonth(),1).toLocaleDateString('en-CA');
+  openModal(`<h3>💸 Keluar dari Laci</h3>
+    <p class="muted" style="font-size:13px;margin-top:0">Uang yang diambil dari laci lewat Catatan Kasir (jenis "Keluar"). Ini <b>sudah otomatis</b> ikut dihitung sebagai pengeluaran di Dashboard & Laporan.</p>
+    <div class="row" style="align-items:end"><div style="flex:1"><label>Dari</label><input id="lc-from" type="date" value="${first}"></div><div style="flex:1"><label>Sampai</label><input id="lc-to" type="date" value="${todayISO()}"></div><button class="btn" onclick="laciCalc()">Lihat</button></div>
+    <div id="lc-out" style="margin-top:12px">${skelRows(1)}</div>`);
+  laciCalc();
+}
+async function laciCalc(){
+  const from=$('lc-from').value, to=$('lc-to').value; if(!from||!to){ toast('Isi rentang tanggal.'); return; }
+  const out=$('lc-out'); if(out) out.innerHTML=skelRows(2);
+  const { data, error }=await sb.from('kas').select('*').gte('tanggal',from).lte('tanggal',to).eq('jenis','keluar').order('tanggal',{ascending:false}).order('created_at',{ascending:false});
+  if(!$('lc-out')) return;
+  if(error){ $('lc-out').innerHTML=emptyState('⚠️','Gagal: '+error.message); return; }
+  const rows=data||[]; const total=rows.reduce((a,k)=>a+(k.nominal||0),0);
+  $('lc-out').innerHTML=`<div class="card" style="background:var(--panel2)"><div class="muted" style="font-size:12px">Total keluar dari laci (${tglID(from)} – ${tglID(to)})</div><b style="font-size:22px;color:var(--bad)">${rp(total)}</b></div>`
+    + (rows.length? `<table style="margin-top:10px"><thead><tr><th>Tanggal</th><th>Nominal</th><th>Keterangan</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${tglID(r.tanggal)}</td><td style="color:var(--bad)"><b>${rp(r.nominal)}</b></td><td class="muted">${esc(r.keterangan||'-')}</td></tr>`).join('')}</tbody></table>` : emptyState('💵','Tidak ada uang keluar dari laci pada rentang ini.'));
+}
 async function renderCustomers(){
   $('main').innerHTML = topbar('Pelanggan', `<button class="btn" onclick="custForm()">+ Pelanggan</button>`)
     + `<div class="card"><input id="cust-search" placeholder="Cari nama / HP…" oninput="loadCustomers()" style="margin-bottom:12px"><div id="cust-tbl">${skelRows(4)}</div></div>`;
