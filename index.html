@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -132,7 +132,7 @@
 <!-- ===== SAMBUNGKAN DATABASE ===== -->
 <div id="setup-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark">HL</div><div><h1>Sambungkan Database</h1><div class="muted" style="font-size:13px">Sekali isi, tersimpan di perangkat ini</div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Sambungkan Database</h1><div class="muted" style="font-size:13px">Sekali isi, tersimpan di perangkat ini</div></div></div>
     <p class="muted" style="font-size:13px;margin:14px 0 4px">Tempel <b>URL</b> dan <b>KUNCI (publishable)</b> dari Supabase.</p>
     <div style="margin:10px 0 4px"><label>URL project</label><input id="cfg-url" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocomplete="off"></div>
     <div style="margin:10px 0 4px"><label>Kunci publishable (sb_publishable_...)</label><textarea id="cfg-key" rows="3" placeholder="sb_publishable_..." autocapitalize="off"></textarea></div>
@@ -145,7 +145,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark">HL</div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry</div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v09</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -171,7 +171,7 @@
 <!-- ===== APLIKASI ===== -->
 <div id="app" class="hide">
   <nav id="side">
-    <div class="brand"><div class="mark">HL</div> Hanum Laundry</div>
+    <div class="brand"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div> Hanum Laundry</div>
     <button class="navbtn staff" data-view="dashboard" onclick="nav('dashboard')"><span class="ico">📊</span> Dashboard</button>
     <button class="navbtn staff" data-view="pos" onclick="nav('pos')"><span class="ico">➕</span> Order Baru</button>
     <button class="navbtn staff" data-view="orders" onclick="nav('orders')"><span class="ico">📋</span> Daftar Pesanan</button>
@@ -199,6 +199,8 @@
    ============================================================ */
 const SB_URL_DEFAULT = "";
 const SB_KEY_DEFAULT = "";
+const SITE_URL = "https://hanum-laundry.vercel.app";
+const APP_VERSION = "v09";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -245,7 +247,7 @@ const PAKET = [
     {label:'Boneka', min:5000, max:30000},
     {label:'Bantal', min:10000, max:20000},
     {label:'Sepatu', min:25000, max:30000},
-    {label:'Sandal', min:10000, max:15000} ]}
+    {label:'Sandal', min:15000, max:25000} ]}
 ];
 
 /* ----- status otomatis: proses → siap (saat jatuh tempo) → selesai ----- */
@@ -344,7 +346,7 @@ function nav(view){
   ({dashboard:renderDashboard,pos:renderPOS,orders:renderOrders,kas:renderKas,expenses:renderExpenses,customers:renderCustomers,services:renderServices,reports:renderReports,users:renderUsers,portal:renderPortal}[view]||renderDashboard)();
 }
 
-function topbar(title, extra){ return `<div class="topbar"><h2>${title}</h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button></div></div>`; }
+function topbar(title, extra){ return `<div class="topbar"><h2>${title} <span style="font-size:11px;font-weight:600;color:#fff;background:#16a34a;padding:2px 7px;border-radius:20px;vertical-align:middle">${APP_VERSION}</span></h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button></div></div>`; }
 function emptyState(ico,msg){ return `<div class="empty"><div class="e-ico">${ico}</div>${esc(msg)}</div>`; }
 function skelRows(n){ let s=''; for(let i=0;i<n;i++) s+=`<div class="skel" style="height:46px;margin-bottom:8px"></div>`; return s; }
 
@@ -361,9 +363,12 @@ async function renderDashboard(){
   const all = data||[]; state.allOrders=all;
   const valid = all.filter(p=>p.status!=='batal');
   const _mStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toLocaleDateString('en-CA');
-  const { data:expRows } = await sb.from('pengeluaran').select('tanggal,total,status').gte('tanggal', _mStart).neq('status','batal');
+  const [{ data:expRows }, { data:kasOutRows }] = await Promise.all([
+    sb.from('pengeluaran').select('total,status').gte('tanggal', _mStart).neq('status','batal'),
+    sb.from('kas').select('nominal,jenis').gte('tanggal', _mStart).eq('jenis','keluar')
+  ]);
   if(_seq!==state.navSeq) return;
-  const expBulan = (expRows||[]).reduce((a,x)=>a+(x.total||0),0);
+  const expBulan = (expRows||[]).reduce((a,x)=>a+(x.total||0),0) + (kasOutRows||[]).reduce((a,k)=>a+(k.nominal||0),0);
 
   const now=new Date();
   const dToday=new Date(now.getFullYear(),now.getMonth(),now.getDate());
@@ -379,11 +384,11 @@ async function renderDashboard(){
 
   // pelanggan aktif
   const byC={};
-  valid.forEach(o=>{ const k=o.pelanggan_id||('n:'+o.pelanggan_nama); if(!byC[k]) byC[k]={nama:o.pelanggan_nama||'-',count:0,total:0,last:o.created_at}; byC[k].count++; byC[k].total+=o.total||0; if(new Date(o.created_at)>new Date(byC[k].last)) byC[k].last=o.created_at; });
+  valid.forEach(o=>{ const k=o.pelanggan_id||('n:'+o.pelanggan_nama); if(!byC[k]) byC[k]={id:o.pelanggan_id||null,nama:o.pelanggan_nama||'-',count:0,total:0,last:o.created_at}; byC[k].count++; byC[k].total+=o.total||0; if(new Date(o.created_at)>new Date(byC[k].last)) byC[k].last=o.created_at; });
   const top=Object.values(byC).sort((a,b)=>b.count-a.count||b.total-a.total).slice(0,8);
 
   const icoBox=(c,bg)=>`<span class="ico" style="background:${bg};color:${c}">`;
-  m.innerHTML = topbar('Dashboard', `${isOwner()?`<button class="btn sec" onclick="resetDataConfirm()">🗑️ Reset Data</button>`:''}<button class="btn" onclick="nav('pos')">+ Order Baru</button>`)
+  m.innerHTML = topbar('Dashboard', `<button class="btn" onclick="nav('pos')">+ Order Baru</button>`)
    + `<div class="stats">
         <div class="card stat">${icoBox('#15803d','#dcfce7')}💰</span><div class="lbl">Omzet hari ini</div><div class="big">${rp(omzetHari)}</div></div>
         <div class="card stat" style="cursor:pointer" onclick="openPeriode('bulan')">${icoBox('#6d28d9','#ede9fe')}🗓️</span><div class="lbl">Omzet bulan ini ›</div><div class="big">${rp(omzetBulan)}</div></div>
@@ -408,8 +413,8 @@ async function renderDashboard(){
       </div>
       <div class="card" style="margin-top:14px">
         <h3>Pelanggan Teraktif</h3>
-        ${top.length? `<table><thead><tr><th>Nama</th><th>Transaksi</th><th>Total</th><th>Terakhir</th></tr></thead><tbody>${
-          top.map(c=>`<tr><td><b>${esc(c.nama)}</b></td><td>${c.count}×</td><td>${rp(c.total)}</td><td class="muted">${tglID(c.last)}</td></tr>`).join('')
+        ${top.length? `<div class="muted" style="font-size:12px;margin-bottom:6px">Ketuk nama untuk opsi hapus data pelanggan.</div><table><thead><tr><th>Nama</th><th>Transaksi</th><th>Total</th><th>Terakhir</th></tr></thead><tbody>${
+          top.map(c=>`<tr style="cursor:pointer" onclick="hapusPelangganConfirm(${c.id?`'${c.id}'`:'null'},'${esc(c.nama).replace(/'/g,"\\'")}')"><td><b>${esc(c.nama)}</b></td><td>${c.count}×</td><td>${rp(c.total)}</td><td class="muted">${tglID(c.last)}</td></tr>`).join('')
         }</tbody></table>` : emptyState('👥','Belum ada transaksi pelanggan.')}
       </div>`;
   $('chart-mode').value=state.chartMode;
@@ -467,20 +472,17 @@ function periodeCalc(){
 }
 
 /* ----- reset semua data transaksi (owner) ----- */
-function resetDataConfirm(){
-  openModal(`<h3>🗑️ Reset Semua Data</h3>
-    <p class="muted">Menghapus <b>PERMANEN</b> semua: pesanan, item, riwayat status, catatan kas, dan data pelanggan. <b>Akun login & layanan tetap aman.</b></p>
-    <p class="muted">Untuk membuang data percobaan sebelum dipakai sungguhan. <b>Tidak bisa dibatalkan.</b></p>
-    <div style="margin:8px 0 4px"><label>Ketik <b>HAPUS</b> untuk konfirmasi</label><input id="reset-confirm" placeholder="HAPUS" autocapitalize="characters"></div>
-    <div class="row" style="margin-top:12px"><button class="btn bad" onclick="resetAllData()">Hapus Semua</button><button class="btn sec" onclick="closeModal()">Batal</button></div>`);
+function hapusPelangganConfirm(id,nama){
+  openModal(`<h3>Hapus Data Pelanggan</h3>
+    <p class="muted">Menghapus <b>semua pesanan</b> milik <b>${esc(nama)}</b> beserta riwayatnya, dan data pelanggannya. Semua total (Dashboard, Pesanan, Laporan) otomatis menyesuaikan. <b>Tidak bisa dibatalkan.</b></p>
+    <div class="row" style="margin-top:12px"><button class="btn bad" onclick="hapusPelangganData(${id?`'${id}'`:'null'},'${esc(nama).replace(/'/g,"\\'")}')">Hapus data</button><button class="btn sec" onclick="closeModal()">Tutup</button></div>`);
 }
-async function resetAllData(){
-  if(($('reset-confirm').value||'').trim().toUpperCase()!=='HAPUS'){ toast('Ketik HAPUS untuk konfirmasi.'); return; }
+async function hapusPelangganData(id,nama){
   try{
-    await sb.from('pesanan').delete().gte('created_at','1900-01-01');
-    await sb.from('kas').delete().gte('created_at','1900-01-01');
-    await sb.from('pelanggan').delete().gte('created_at','1900-01-01');
-    state.pelangganCache=[]; closeModal(); toast('Semua data transaksi dihapus.'); renderDashboard();
+    if(id){ await sb.from('pesanan').delete().eq('pelanggan_id',id); await sb.from('pelanggan').delete().eq('id',id); }
+    else { await sb.from('pesanan').delete().eq('pelanggan_nama',nama).is('pelanggan_id',null); }
+    state.pelangganCache=state.pelangganCache.filter(c=>c.id!==id);
+    closeModal(); toast('Data '+nama+' dihapus.'); renderDashboard();
   }catch(e){ toast('Gagal: '+(e.message||e)); }
 }
 async function delPesanan(id){
@@ -543,16 +545,23 @@ function onCustInput(){ const v=$('cust-name').value.trim().toLowerCase(); const
 function setHarga(i,v){ const it=state.cart[i]; let h=Math.round(+v||0); if(it.hargaMin!=null&&h<it.hargaMin)h=it.hargaMin; if(it.hargaMax!=null&&h>it.hargaMax)h=it.hargaMax; it.harga=h; renderCart(); }
 function setQty(i,v){ state.cart[i].qty=Math.max(0,+(+v).toFixed(2)); renderCart(); }
 function removeItem(i){ state.cart.splice(i,1); renderCart(); }
-function computeTotals(){ let s=0; state.cart.forEach(it=>{ it.subtotal=Math.round((it.harga||0)*(it.qty||0)); s+=it.subtotal; }); let pct=Number($('po-diskon')?.value)||0; if(pct<0)pct=0; if(pct>100)pct=100; const d=Math.round(s*pct/100); return {subtotal:s,diskonPct:pct,diskon:d,total:s-d}; }
+function computeTotals(){ let s=0; state.cart.forEach(it=>{ const q=(it.tipe==='kiloan'&&it.min)?Math.max(Number(it.qty)||0,it.min):(Number(it.qty)||0); it.bil=q; it.subtotal=Math.round((it.harga||0)*q); s+=it.subtotal; }); let pct=Number($('po-diskon')?.value)||0; if(pct<0)pct=0; if(pct>100)pct=100; const d=Math.round(s*pct/100); return {subtotal:s,diskonPct:pct,diskon:d,total:s-d}; }
 function renderCart(){
   const w=$('cart-items'); if(!w) return;
+  const hasKilo = state.cart.some(it=>it.tipe==='kiloan');
   w.innerHTML = state.cart.length===0 ? emptyState('🛒','Belum ada item. Pilih paket di kiri.')
-    : state.cart.map((it,i)=>{
-        const hargaCtl = it.tipe==='satuan'
-          ? `<input type="number" min="0" value="${it.harga}" onchange="setHarga(${i},this.value)" style="width:96px;text-align:right"> <span class="muted" style="font-size:11px">(${rp(it.hargaMin)}–${rp(it.hargaMax)})</span>`
-          : `<span class="muted">${rp(it.harga)}/kg${it.min?(' · min '+it.min+'kg'):''}</span>`;
-        return `<div class="cartline"><div><b>${esc(it.nama)}</b><br>${hargaCtl}</div>
-          <div style="text-align:right"><div class="qtybox"><input type="number" min="0" step="${it.tipe==='satuan'?'1':'0.1'}" value="${it.qty}" onchange="setQty(${i},this.value)"><span class="muted">${esc(it.satuan)}</span><button class="btn sec sm" onclick="removeItem(${i})">✕</button></div><div style="margin-top:4px"><b>${rp(it.subtotal||0)}</b></div></div></div>`;
+    : (hasKilo?`<div class="muted" style="font-size:12px;margin-bottom:8px;background:var(--panel2);padding:8px 10px;border-radius:9px">⚖️ Paket kiloan: isi <b>berat hasil timbangan (kg)</b> di tiap item — total terhitung otomatis.</div>`:'')
+    + state.cart.map((it,i)=>{
+        if(it.tipe==='satuan'){
+          return `<div class="cartline"><div style="flex:1"><b>${esc(it.nama)}</b><br><span class="muted" style="font-size:12px">Harga ${rp(it.hargaMin)}–${rp(it.hargaMax)}/pcs</span>
+              <div style="margin-top:5px"><input type="number" min="0" value="${it.harga}" onchange="setHarga(${i},this.value)" style="width:120px;text-align:right;font-weight:600"></div></div>
+            <div style="text-align:right"><div class="qtybox"><input type="number" min="0" step="1" value="${it.qty}" onchange="setQty(${i},this.value)"><span class="muted">pcs</span><button class="btn sec sm" onclick="removeItem(${i})">✕</button></div><div style="margin-top:4px"><b>${rp(it.subtotal||0)}</b></div></div></div>`;
+        }
+        const below = it.min && Number(it.qty)<it.min;
+        return `<div class="cartline"><div style="flex:1"><b>${esc(it.nama)}</b><br><span class="muted" style="font-size:12px">${rp(it.harga)}/kg · min ${it.min}kg</span>
+            <div style="margin-top:6px"><label style="font-size:11px;color:var(--muted)">Berat timbangan (kg)</label><br>
+              <input type="number" min="0" step="0.1" value="${it.qty}" onchange="setQty(${i},this.value)" style="width:120px;font-weight:700;font-size:16px;text-align:center"> ${below?`<span style="color:var(--warn);font-size:11px">⚠ di bawah min — ditagih ${it.min}kg</span>`:''}</div></div>
+          <div style="text-align:right"><button class="btn sec sm" onclick="removeItem(${i})">✕</button><div style="margin-top:10px"><b>${rp(it.subtotal||0)}</b></div></div></div>`;
       }).join('');
   const t=computeTotals();
   $('cart-totals').innerHTML=`<div class="totline"><span class="muted">Subtotal</span><span>${rp(t.subtotal)}</span></div><div class="totline"><span class="muted">Diskon (${t.diskonPct||0}%)</span><span>- ${rp(t.diskon)}</span></div><div class="totline grand"><span>Total</span><span>${rp(t.total)}</span></div>`;
@@ -574,7 +583,7 @@ async function saveOrder(){
     const jam=Math.max(0,...state.cart.map(i=>i.jam||0)); const estTs=new Date(Date.now()+jam*3600000);
     const { data:ps, error:pe } = await sb.from('pesanan').insert({ pelanggan_id:pelangganId, pelanggan_nama:nama, kasir_id:state.me.id, kasir_nama:state.profile.nama, status:'proses', subtotal:t.subtotal, diskon:t.diskon, total:t.total, bayar, kembalian, metode_bayar:$('po-metode').value, status_bayar:statusBayar, catatan:$('po-catatan').value.trim(), estimasi_ts:estTs.toISOString(), estimasi_selesai:estTs.toLocaleDateString('en-CA') }).select().single();
     if(pe) throw pe;
-    const items=state.cart.map(it=>({pesanan_id:ps.id,layanan_id:null,nama_layanan:it.nama,satuan:it.satuan,harga:it.harga,qty:it.qty,subtotal:it.subtotal}));
+    const items=state.cart.map(it=>({pesanan_id:ps.id,layanan_id:null,nama_layanan:it.nama,satuan:it.satuan,harga:it.harga,qty:(it.bil!=null?it.bil:it.qty),subtotal:it.subtotal}));
     const { error:ie } = await sb.from('pesanan_item').insert(items); if(ie) throw ie;
     await sb.from('status_log').insert({ pesanan_id:ps.id, status:'proses', oleh:state.profile.nama });
     toast('Tersimpan: '+ps.nomor_invoice); printStruk(ps, state.cart); state.cart=[]; renderPOS();
@@ -631,10 +640,10 @@ async function openOrder(id){
   const canSelesai=p.status==='proses', canCancel=p.status==='proses';
   const logHTML=(logs||[]).map(l=>`<div class="muted" style="font-size:12px">${new Date(l.created_at).toLocaleString('id-ID')} — ${esc(STATUS[l.status]?.label||l.status)} oleh ${esc(l.oleh||'-')}</div>`).join('');
   const showWA=(ds==='siap'||ds==='selesai');
-  const waMsg=`Halo ${p.pelanggan_nama},\n\nLaundry Anda telah selesai dan siap diambil.\n\nNomor Nota:\n${p.nomor_invoice}\n\nTerima kasih telah menggunakan Hanum Laundry.`;
+  const waMsg=`Halo ${p.pelanggan_nama},\n\nLaundry Anda telah selesai dan siap diambil.\n\nNomor Nota:\n${p.nomor_invoice}\n\nCek status & nota online di:\n${SITE_URL}\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏`;
   let notaMsg='*HANUM LAUNDRY*\nNota: '+p.nomor_invoice+'\nKode lacak: '+(p.kode_tracking||'-')+'\nNama: '+p.pelanggan_nama+'\n\nRincian:\n';
   (items||[]).forEach(it=>{ notaMsg+='- '+it.nama_layanan+' '+it.qty+it.satuan+' = '+rp(it.subtotal)+'\n'; });
-  notaMsg+='\nSubtotal: '+rp(p.subtotal)+'\nDiskon: '+rp(p.diskon)+'\nTotal: '+rp(p.total)+'\nStatus bayar: '+(p.status_bayar==='lunas'?'Lunas ('+p.metode_bayar+')':'Belum bayar')+'\nStatus: '+(STATUS[ds]?.label||ds)+'\nEstimasi selesai: '+fmtDue(p)+'\n\nTerima kasih telah menggunakan Hanum Laundry 🙏';
+  notaMsg+='\nSubtotal: '+rp(p.subtotal)+'\nDiskon: '+rp(p.diskon)+'\nTotal: '+rp(p.total)+'\nStatus bayar: '+(p.status_bayar==='lunas'?'Lunas ('+p.metode_bayar+')':'Belum bayar')+'\nStatus: '+(STATUS[ds]?.label||ds)+'\nEstimasi selesai: '+fmtDue(p)+'\n\nCek status & nota online di:\n'+SITE_URL+'\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏';
   openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">${esc(p.pelanggan_nama||'-')} · Lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div><div>${statusPill(ds)}</div></div>
     ${stepHTML?`<div class="steps">${stepHTML}</div>`:''}
     <div style="margin:8px 0">${itemRows||'<span class="muted">—</span>'}</div>
@@ -698,7 +707,8 @@ const EXP_PLASTIK = ['uk 35','uk 40','uk 45','uk 50','uk 55'];
 const EXP_SATUAN = ['Kg','Liter','Botol/Jerigen','Pcs','Dus','Roll','Pak','Unit','Lembar','Lainnya'];
 const EXP_STATUS = { belum:{label:'Menunggu Pembayaran',color:'#b45309',bg:'#fef3c7'}, lunas:{label:'Sudah Dibayar',color:'#15803d',bg:'#dcfce7'}, batal:{label:'Dibatalkan',color:'#b91c1c',bg:'#fee2e2'} };
 let expCustomCats = [];
-const expState = { q:'', periode:'bulan', tgl:'', bulan:'', tahun:'', kategori:'', status:'', _rows:[] };
+let expPaper = [0];
+const expState = { q:'', periode:'bulan', tgl:'', bulan:'', tahun:'', kategori:'', status:'', appHari:0, appBulan:0, _rows:[] };
 function nowHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 function allExpCats(){ return [...EXP_KATEGORI, ...expCustomCats.filter(c=>!EXP_KATEGORI.includes(c))]; }
 function expPill(s){ const o=EXP_STATUS[s]||{label:s,color:'#64748b',bg:'#e2e8f0'}; return `<span class="pill" style="color:${o.color};background:${o.bg}"><span class="dot"></span>${esc(o.label)}</span>`; }
@@ -707,20 +717,64 @@ async function renderExpenses(){
   if(!isStaff()){ toast('Khusus owner/admin.'); nav('dashboard'); return; }
   const _seq=state.navSeq;
   $('main').innerHTML = topbar('Pengeluaran Operasional', `${isOwner()?`<button class="btn sec" onclick="expManageCats()">⚙️ Kategori</button>`:''}<button class="btn sec" onclick="printExpenses()">🖨️ Cetak</button><button class="btn" onclick="expForm()">+ Pengeluaran</button>`)
-    + `<p class="muted" style="margin:-6px 0 12px">Catat semua biaya operasional. Otomatis masuk ke Dashboard & Laporan.</p>
+    + `<p class="muted" style="margin:-6px 0 12px">Catat semua biaya operasional. Otomatis masuk ke Dashboard & Laporan. Ketuk kartu untuk pilih tanggal/bulan.</p>
        <div id="exp-sum" class="stats" style="margin-bottom:12px"><div class="skel" style="height:96px"></div><div class="skel" style="height:96px"></div></div>
-       <div class="card"><div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
-         <input id="exp-q" placeholder="Cari nama barang…" style="flex:1;min-width:150px" value="${esc(expState.q)}" oninput="expState.q=this.value;loadExpenses()">
-         <select id="exp-f-periode" style="max-width:150px" onchange="expState.periode=this.value;expPeriodeInput();loadExpenses()"><option value="semua">Semua waktu</option><option value="hari">Hari ini</option><option value="bulan">Bulan ini</option><option value="tahun">Tahun ini</option><option value="pilih-tgl">Pilih tanggal</option><option value="pilih-bln">Pilih bulan</option><option value="pilih-thn">Pilih tahun</option></select>
-         <span id="exp-periode-input"></span>
-         <select id="exp-f-kat" style="max-width:170px" onchange="expState.kategori=this.value;loadExpenses()"><option value="">Semua kategori</option>${allExpCats().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select>
-         <select id="exp-f-status" style="max-width:180px" onchange="expState.status=this.value;loadExpenses()"><option value="">Semua status</option>${Object.entries(EXP_STATUS).map(([k,v])=>`<option value="${k}">${esc(v.label)}</option>`).join('')}</select>
-       </div><div id="exp-list">${skelRows(4)}</div></div>`;
-  $('exp-f-periode').value=expState.periode; if(expState.kategori)$('exp-f-kat').value=expState.kategori; if(expState.status)$('exp-f-status').value=expState.status; expPeriodeInput();
+       <div class="card" style="margin-bottom:12px"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-calc-body',this)"><h3 style="margin:0">🧮 Kalkulator (catatan di kertas)</h3><span class="collapse-ic">▸</span></div><div id="exp-calc-body" style="display:none"></div></div>
+       <div class="card"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-list-wrap',this)"><h3 style="margin:0">Riwayat Pengeluaran</h3><span class="collapse-ic">▾</span></div>
+         <div id="exp-list-wrap">
+           <div class="row" style="margin:10px 0;flex-wrap:wrap;gap:8px">
+             <input id="exp-q" placeholder="Cari nama barang…" style="flex:1;min-width:150px" value="${esc(expState.q)}" oninput="expState.q=this.value;loadExpenses()">
+             <select id="exp-f-periode" style="max-width:150px" onchange="expState.periode=this.value;expPeriodeInput();loadExpenses()"><option value="semua">Semua waktu</option><option value="hari">Hari ini</option><option value="bulan">Bulan ini</option><option value="tahun">Tahun ini</option><option value="pilih-tgl">Pilih tanggal</option><option value="pilih-bln">Pilih bulan</option><option value="pilih-thn">Pilih tahun</option></select>
+             <span id="exp-periode-input"></span>
+             <select id="exp-f-status" style="max-width:180px" onchange="expState.status=this.value;loadExpenses()"><option value="">Semua status</option>${Object.entries(EXP_STATUS).map(([k,v])=>`<option value="${k}">${esc(v.label)}</option>`).join('')}</select>
+           </div><div id="exp-list">${skelRows(4)}</div>
+         </div></div>`;
+  $('exp-f-periode').value=expState.periode; if(expState.status)$('exp-f-status').value=expState.status; expPeriodeInput(); expCalcRender();
   const { data:cats } = await sb.from('pengeluaran_kategori').select('nama').order('nama');
   if(_seq!==state.navSeq) return;
   expCustomCats = (cats||[]).map(c=>c.nama);
   loadExpenses();
+}
+function toggleCollapse(id,btn){ const el=$(id); if(!el) return; const show=el.style.display==='none'; el.style.display=show?'':'none'; if(btn){ const ic=btn.querySelector('.collapse-ic'); if(ic) ic.textContent=show?'▾':'▸'; } }
+function expCalcRender(){ const w=$('exp-calc-body'); if(!w) return;
+  w.innerHTML=`<p class="muted" style="font-size:12px;margin-top:8px">Masukkan pengeluaran yang dicatat di <b>kertas</b> (belum ditulis di sini). <b>Tidak disimpan</b> — hanya alat hitung total sebenarnya.</p>
+    <div id="exp-paper-rows">${expPaperRows()}</div>
+    <button class="btn sec sm" onclick="expPaper.push(0);$('exp-paper-rows').innerHTML=expPaperRows();expCalcTotals()" style="margin-top:4px">+ Baris</button>
+    <div id="exp-calc-out" style="margin-top:10px"></div>`;
+  expCalcTotals();
+}
+function expPaperRows(){ return expPaper.map((v,i)=>`<div class="row" style="margin-bottom:6px;gap:6px"><input type="number" min="0" inputmode="numeric" placeholder="Nominal di kertas (Rp)" value="${v||''}" oninput="expPaper[${i}]=this.value;expCalcTotals()" style="flex:1"><button class="btn sec sm" onclick="expPaper.splice(${i},1);if(!expPaper.length)expPaper=[0];$('exp-paper-rows').innerHTML=expPaperRows();expCalcTotals()">✕</button></div>`).join(''); }
+function expCalcTotals(){ const out=$('exp-calc-out'); if(!out) return; const paper=expPaper.reduce((a,v)=>a+(Math.round(Number(v)||0)),0);
+  out.innerHTML=`<div class="totline"><span class="muted">Total catatan kertas</span><b>${rp(paper)}</b></div>
+    <div class="totline grand"><span>HARI INI: app ${rp(expState.appHari||0)} + kertas</span><span>${rp((expState.appHari||0)+paper)}</span></div>
+    <div class="totline grand"><span>BULAN INI: app ${rp(expState.appBulan||0)} + kertas</span><span>${rp((expState.appBulan||0)+paper)}</span></div>`;
+}
+function openExpPeriode(initial){
+  openModal(`<h3>Lihat Pengeluaran per Periode</h3>
+    <div style="margin:8px 0 4px"><label>Jenis</label><select id="ep-type" onchange="expPeriodeRender()"><option value="hari">Per Hari</option><option value="bulan">Per Bulan</option><option value="tahun">Per Tahun</option></select></div>
+    <div id="ep-input"></div><div id="ep-out" style="margin-top:12px"></div>`);
+  $('ep-type').value=initial||'bulan'; expPeriodeRender();
+}
+function expPeriodeRender(){
+  const t=$('ep-type').value, now=new Date(), wrap=$('ep-input');
+  if(t==='hari'){ wrap.innerHTML=`<label>Pilih tanggal</label><input id="ep-date" type="date" value="${todayISO()}" onchange="expPeriodeCalc()">`; }
+  else if(t==='bulan'){ const months=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']; let yrs=''; for(let y=now.getFullYear();y>=now.getFullYear()-5;y--) yrs+=`<option value="${y}">${y}</option>`; wrap.innerHTML=`<div class="row"><div style="flex:1"><label>Bulan</label><select id="ep-month" onchange="expPeriodeCalc()">${months.map((mn,i)=>`<option value="${i}" ${i===now.getMonth()?'selected':''}>${mn}</option>`).join('')}</select></div><div style="flex:1"><label>Tahun</label><select id="ep-year" onchange="expPeriodeCalc()">${yrs}</select></div></div>`; }
+  else { let yrs=''; for(let y=now.getFullYear();y>=now.getFullYear()-6;y--) yrs+=`<option value="${y}">${y}</option>`; wrap.innerHTML=`<label>Tahun</label><select id="ep-year" onchange="expPeriodeCalc()">${yrs}</select>`; }
+  expPeriodeCalc();
+}
+async function expPeriodeCalc(){
+  const t=$('ep-type').value, ymd=dt=>dt.toLocaleDateString('en-CA'); let from,to,label=''; const MO=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  if(t==='hari'){ const dd=$('ep-date').value||todayISO(); from=to=dd; label=tglID(dd); }
+  else if(t==='bulan'){ const mo=+$('ep-month').value, yr=+$('ep-year').value; from=`${yr}-${String(mo+1).padStart(2,'0')}-01`; to=ymd(new Date(yr,mo+1,0)); label=`${MO[mo]} ${yr}`; }
+  else { const yr=+$('ep-year').value; from=`${yr}-01-01`; to=`${yr}-12-31`; label=''+yr; }
+  const out=$('ep-out'); if(out) out.innerHTML=skelRows(1);
+  const [{ data }, { data:kasOut }] = await Promise.all([
+    sb.from('pengeluaran').select('total,status').gte('tanggal',from).lte('tanggal',to).neq('status','batal'),
+    sb.from('kas').select('nominal,jenis').gte('tanggal',from).lte('tanggal',to).eq('jenis','keluar')
+  ]);
+  if(!$('ep-out')) return;
+  const rows=data||[]; const laci=(kasOut||[]).reduce((a,k)=>a+(k.nominal||0),0); const total=rows.reduce((a,x)=>a+(x.total||0),0)+laci;
+  $('ep-out').innerHTML=`<div class="card" style="background:var(--panel2)"><div class="muted" style="font-size:13px">Periode: ${esc(label)}</div><div class="row" style="margin-top:6px;gap:20px"><div><div class="muted" style="font-size:12px">Total pengeluaran</div><b style="font-size:20px;color:var(--bad)">${rp(total)}</b></div><div><div class="muted" style="font-size:12px">Termasuk laci</div><b style="font-size:20px;color:var(--bad)">${rp(laci)}</b></div></div></div>`;
 }
 function expPeriodeInput(){
   const w=$('exp-periode-input'); if(!w) return; const p=expState.periode; const d=new Date();
@@ -760,23 +814,27 @@ async function loadExpenses(){
 async function expRenderSummary(){
   const el=$('exp-sum'); if(!el) return;
   const d=new Date(); const mStart=new Date(d.getFullYear(),d.getMonth(),1).toLocaleDateString('en-CA');
-  const { data } = await sb.from('pengeluaran').select('tanggal,total,status').gte('tanggal',mStart).neq('status','batal');
+  const [{ data }, { data:kasOut }] = await Promise.all([
+    sb.from('pengeluaran').select('tanggal,total,status').gte('tanggal',mStart).neq('status','batal'),
+    sb.from('kas').select('tanggal,nominal,jenis').gte('tanggal',mStart).eq('jenis','keluar')
+  ]);
   if(!$('exp-sum')) return;
-  const rows=data||[]; const today=todayISO();
-  const hari=rows.filter(x=>x.tanggal===today).reduce((a,x)=>a+(x.total||0),0);
-  const bulan=rows.reduce((a,x)=>a+(x.total||0),0);
-  el.innerHTML=`<div class="card stat">${`<span class="ico" style="background:#fee2e2;color:#b91c1c">`}🧾</span><div class="lbl">Pengeluaran hari ini</div><div class="big" style="color:var(--bad)">${rp(hari)}</div></div>
-    <div class="card stat">${`<span class="ico" style="background:#fee2e2;color:#b91c1c">`}📅</span><div class="lbl">Pengeluaran bulan ini</div><div class="big" style="color:var(--bad)">${rp(bulan)}</div></div>`;
+  const rows=data||[]; const kasRows=kasOut||[]; const today=todayISO();
+  const hari=rows.filter(x=>x.tanggal===today).reduce((a,x)=>a+(x.total||0),0) + kasRows.filter(k=>k.tanggal===today).reduce((a,k)=>a+(k.nominal||0),0);
+  const bulan=rows.reduce((a,x)=>a+(x.total||0),0) + kasRows.reduce((a,k)=>a+(k.nominal||0),0);
+  expState.appHari=hari; expState.appBulan=bulan;
+  el.innerHTML=`<div class="card stat" style="cursor:pointer" onclick="openExpPeriode('hari')"><span class="ico" style="background:#fee2e2;color:#b91c1c">🧾</span><div class="lbl">Pengeluaran hari ini ›</div><div class="big" style="color:var(--bad)">${rp(hari)}</div></div>
+    <div class="card stat" style="cursor:pointer" onclick="openExpPeriode('bulan')"><span class="ico" style="background:#fee2e2;color:#b91c1c">📅</span><div class="lbl">Pengeluaran bulan ini ›</div><div class="big" style="color:var(--bad)">${rp(bulan)}</div></div>`;
+  if($('exp-calc-out')) expCalcTotals();
 }
 function expForm(x){ x=x||{}; const isEdit=!!x.id; const cats=allExpCats();
-  const catOpts=cats.map(c=>`<option value="${esc(c)}" ${x.kategori===c?'selected':''}>${esc(c)}</option>`).join('')+`<option value="__lain__" ${(x.kategori&&!cats.includes(x.kategori))?'selected':''}>+ Lainnya (ketik baru)</option>`;
+  const catOpts=cats.map(c=>`<option value="${esc(c)}" ${x.kategori===c?'selected':''}>${esc(c)}</option>`).join('')+`<option value="Lainnya" ${(x.kategori==='Lainnya'||(x.kategori&&!cats.includes(x.kategori)))?'selected':''}>Lainnya</option>`;
   const satOpts=EXP_SATUAN.map(s=>`<option value="${s}" ${x.satuan===s?'selected':''}>${s}</option>`).join('');
   const stOpts=Object.entries(EXP_STATUS).map(([k,v])=>`<option value="${k}" ${(x.status||'lunas')===k?'selected':''}>${esc(v.label)}</option>`).join('');
   openModal(`<h3>${isEdit?'Edit':'Tambah'} Pengeluaran</h3>
     <div class="row"><div style="flex:1"><label>Tanggal</label><input id="e-tgl" type="date" value="${x.tanggal||todayISO()}"></div><div style="flex:1"><label>Jam</label><input id="e-jam" type="time" value="${x.jam||nowHHMM()}"></div></div>
     <div style="margin:8px 0 4px"><label>Kategori</label><select id="e-kat" onchange="expFormCat()">${catOpts}</select></div>
     <div id="e-kat-extra"></div>
-    <div style="margin:8px 0 4px"><label>Nama barang / keperluan</label><input id="e-nama" value="${esc(x.nama||'')}" placeholder="cth: Pewangi Molto 1L"></div>
     <div class="row"><div style="flex:1"><label>Jumlah</label><input id="e-jml" type="number" min="0" step="0.01" value="${x.jumlah!=null?x.jumlah:1}" oninput="expCalc()"></div><div style="flex:1"><label>Satuan</label><select id="e-sat">${satOpts}</select></div></div>
     <div class="row"><div style="flex:1"><label>Harga satuan (Rp)</label><input id="e-harga" type="number" min="0" value="${x.harga_satuan||0}" oninput="expCalc()"></div><div style="flex:1"><label>Status</label><select id="e-status">${stOpts}</select></div></div>
     <div class="totline grand" style="margin-top:10px"><span>Total</span><span id="e-total">${rp(Math.round((x.jumlah!=null?x.jumlah:1)*(x.harga_satuan||0)))}</span></div>
@@ -785,21 +843,22 @@ function expForm(x){ x=x||{}; const isEdit=!!x.id; const cats=allExpCats();
   expFormCat(x);
 }
 function expFormCat(x){ x=x||{}; const w=$('e-kat-extra'); if(!w) return; const v=$('e-kat').value;
-  if(v==='Plastik Kemasan'){ const cur=(x.nama&&x.nama.indexOf('uk ')>=0)?x.nama.slice(x.nama.indexOf('uk ')):''; w.innerHTML=`<div style="margin:8px 0 4px"><label>Ukuran plastik</label><select id="e-plastik" onchange="$('e-nama').value='Plastik Kemasan '+this.value">${EXP_PLASTIK.map(u=>`<option value="${u}" ${cur===u?'selected':''}>Plastik Kemasan ${u}</option>`).join('')}</select></div>`; if(!$('e-nama').value || $('e-nama').value.indexOf('Plastik Kemasan')>=0) $('e-nama').value='Plastik Kemasan '+($('e-plastik')?.value||EXP_PLASTIK[0]); }
-  else if(v==='__lain__'){ w.innerHTML=`<div style="margin:8px 0 4px"><label>Nama kategori baru</label><input id="e-kat-baru" placeholder="cth: Sewa Tempat" value="${(x.kategori&&!allExpCats().includes(x.kategori))?esc(x.kategori):''}"></div>`; }
+  if(v==='Plastik Kemasan'){ const cur=(x.nama&&x.nama.indexOf('uk ')>=0)?x.nama.slice(x.nama.indexOf('uk ')):''; w.innerHTML=`<div style="margin:8px 0 4px"><label>Ukuran plastik</label><select id="e-plastik">${EXP_PLASTIK.map(u=>`<option value="${u}" ${cur===u?'selected':''}>Plastik Kemasan ${u}</option>`).join('')}</select></div>`; }
+  else if(v==='Lainnya'){ w.innerHTML=`<div style="margin:8px 0 4px"><label>Nama barang / keperluan <span class="muted">(opsional)</span></label><input id="e-nama" placeholder="cth: Beli sapu, dll" value="${(x.kategori==='Lainnya'||(x.kategori&&!allExpCats().includes(x.kategori)))?esc(x.nama||''):''}"></div>`; }
   else w.innerHTML='';
 }
 function expCalc(){ const j=Number($('e-jml').value)||0, h=Number($('e-harga').value)||0; const el=$('e-total'); if(el) el.textContent=rp(Math.round(j*h)); }
 async function saveExp(id){
-  let kategori=$('e-kat').value;
-  if(kategori==='__lain__'){ kategori=($('e-kat-baru')?.value||'').trim(); if(!kategori){ toast('Isi nama kategori baru.'); return; } }
-  const nama=$('e-nama').value.trim(); if(!nama){ toast('Isi nama barang/keperluan.'); return; }
+  const kategori=$('e-kat').value;
+  let nama;
+  if(kategori==='Plastik Kemasan') nama='Plastik Kemasan '+($('e-plastik')?.value||EXP_PLASTIK[0]);
+  else if(kategori==='Lainnya') nama=($('e-nama')?.value||'').trim()||'Lainnya';
+  else nama=kategori;
   const jumlah=Number($('e-jml').value)||0; const harga=Math.round(Number($('e-harga').value)||0); const total=Math.round(jumlah*harga);
   const payload={ tanggal:$('e-tgl').value||todayISO(), jam:$('e-jam').value||nowHHMM(), kategori, nama, jumlah, satuan:$('e-sat').value, harga_satuan:harga, total, status:$('e-status').value, catatan:$('e-catatan').value.trim() };
   try{
     if(id){ payload.diubah_oleh=state.profile.nama; payload.updated_at=new Date().toISOString(); const { error }=await sb.from('pengeluaran').update(payload).eq('id',id); if(error) throw error; }
     else { payload.dibuat_oleh=state.profile.nama; const { error }=await sb.from('pengeluaran').insert(payload); if(error) throw error; }
-    if(!EXP_KATEGORI.includes(kategori)){ try{ await sb.from('pengeluaran_kategori').upsert({nama:kategori},{onConflict:'nama'}); }catch(e){} if(!expCustomCats.includes(kategori)) expCustomCats.push(kategori); }
     closeModal(); toast('Pengeluaran tersimpan.'); loadExpenses();
   }catch(e){ toast('Gagal: '+(e.message||e)); }
 }
@@ -876,19 +935,22 @@ async function renderReports(){
 async function loadReport(){
   const from=$('rp-from').value, to=$('rp-to').value; if(!from||!to){ toast('Isi rentang tanggal.'); return; }
   const r=$('rp-result'); r.innerHTML=skelRows(3);
-  const [{ data, error }, { data:exp }] = await Promise.all([
+  const [{ data, error }, { data:exp }, { data:kasOut }] = await Promise.all([
     sb.from('pesanan').select('total,status,status_bayar,created_at').gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59').order('created_at'),
-    sb.from('pengeluaran').select('total,status,tanggal').gte('tanggal',from).lte('tanggal',to).neq('status','batal')
+    sb.from('pengeluaran').select('total,status,tanggal').gte('tanggal',from).lte('tanggal',to).neq('status','batal'),
+    sb.from('kas').select('nominal,tanggal,jenis').gte('tanggal',from).lte('tanggal',to).eq('jenis','keluar')
   ]);
   if(!$('rp-result')) return;
   if(error){ r.innerHTML=emptyState('⚠️','Gagal: '+error.message); return; }
   const valid=(data||[]).filter(p=>p.status!=='batal'); const omzet=valid.reduce((a,p)=>a+(p.total||0),0); const belum=valid.filter(p=>p.status_bayar==='belum').reduce((a,p)=>a+(p.total||0),0);
-  const expTotal=(exp||[]).reduce((a,x)=>a+(x.total||0),0); const laba=omzet-expTotal;
+  const laciTotal=(kasOut||[]).reduce((a,k)=>a+(k.nominal||0),0);
+  const expTotal=(exp||[]).reduce((a,x)=>a+(x.total||0),0)+laciTotal; const laba=omzet-expTotal;
   const perHari={}; valid.forEach(p=>{ const k=p.created_at.slice(0,10); perHari[k]=perHari[k]||{o:0,e:0}; perHari[k].o+=(p.total||0); });
   (exp||[]).forEach(x=>{ const k=x.tanggal; perHari[k]=perHari[k]||{o:0,e:0}; perHari[k].e+=(x.total||0); });
+  (kasOut||[]).forEach(k=>{ const dd=k.tanggal; perHari[dd]=perHari[dd]||{o:0,e:0}; perHari[dd].e+=(k.nominal||0); });
   const days=Object.keys(perHari).sort();
-  r.innerHTML=`<div class="stats"><div class="card stat"><div class="lbl">Total omzet</div><div class="big">${rp(omzet)}</div></div><div class="card stat"><div class="lbl">Pengeluaran</div><div class="big" style="color:var(--bad)">${rp(expTotal)}</div></div><div class="card stat"><div class="lbl">Laba bersih</div><div class="big" style="color:${laba>=0?'var(--ok)':'var(--bad)'}">${rp(laba)}</div></div><div class="card stat"><div class="lbl">Belum dibayar</div><div class="big" style="color:var(--warn)">${rp(belum)}</div></div></div>
-    <div class="muted" style="font-size:12px;margin-top:6px">Jumlah order: ${valid.length} · Dibatalkan: ${(data||[]).length-valid.length}</div>
+  r.innerHTML=`<div class="stats"><div class="card stat"><div class="lbl">Total omzet</div><div class="big">${rp(omzet)}</div></div><div class="card stat"><div class="lbl">Pengeluaran</div><div class="big" style="color:var(--bad)">${rp(expTotal)}</div></div><div class="card stat"><div class="lbl">Laba bersih</div><div class="big" style="color:${laba>=0?'var(--ok)':'var(--bad)'}">${rp(laba)}</div></div><div class="card stat"><div class="lbl">💸 Keluar dari laci</div><div class="big" style="color:var(--bad)">${rp(laciTotal)}</div></div></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Jumlah order: ${valid.length} · Dibatalkan: ${(data||[]).length-valid.length} · Belum dibayar: ${rp(belum)} · "Keluar dari laci" sudah termasuk di Pengeluaran.</div>
     <h3 style="margin-top:16px">Rincian per hari</h3>${days.length?`<table><thead><tr><th>Tanggal</th><th>Omzet</th><th>Keluar</th><th>Laba</th></tr></thead><tbody>${days.map(d=>`<tr><td>${tglID(d)}</td><td>${rp(perHari[d].o)}</td><td style="color:var(--bad)">${rp(perHari[d].e)}</td><td>${rp(perHari[d].o-perHari[d].e)}</td></tr>`).join('')}<tr><td><b>TOTAL</b></td><td><b>${rp(omzet)}</b></td><td><b style="color:var(--bad)">${rp(expTotal)}</b></td><td><b>${rp(laba)}</b></td></tr></tbody></table>`:emptyState('📊','Tidak ada data pada rentang ini.')}`;
 }
 
