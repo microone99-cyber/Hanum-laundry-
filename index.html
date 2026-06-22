@@ -100,8 +100,22 @@
   .totline{display:flex;justify-content:space-between;padding:5px 0}
   .totline.grand{font-size:21px;font-weight:800;border-top:2px solid var(--ink);margin-top:7px;padding-top:11px}
 
-  .ovl{position:fixed;inset:0;background:rgba(2,6,23,.66);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100}
-  .modal{background:var(--panel);border-radius:18px;padding:22px;width:100%;max-width:480px;max-height:90vh;overflow:auto;box-shadow:0 30px 70px rgba(0,0,0,.4)}
+  .ovl{position:fixed;inset:0;background:rgba(2,6,23,.66);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100;animation:ovlIn .18s ease}
+  .modal{background:var(--panel);border-radius:18px;padding:22px;width:100%;max-width:480px;max-height:90vh;overflow:auto;box-shadow:0 30px 70px rgba(0,0,0,.45);transform-origin:center bottom;animation:modalIn .3s cubic-bezier(.2,.9,.25,1.02)}
+  @keyframes ovlIn{from{opacity:0}to{opacity:1}}
+  @keyframes modalIn{from{opacity:0;transform:perspective(1100px) rotateX(11deg) translateY(26px) scale(.93)}to{opacity:1;transform:perspective(1100px) rotateX(0) translateY(0) scale(1)}}
+  .r2{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+
+  #splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:linear-gradient(165deg,#173f3a 0%,#245d56 52%,#2f7d6c 100%);transition:opacity .45s ease}
+  #splash.off{opacity:0;pointer-events:none}
+  .sp-in{text-align:center;color:#fff;padding:24px;animation:spFade .5s ease}
+  .sp-logo{width:128px;height:128px;border-radius:30px;box-shadow:0 18px 50px rgba(0,0,0,.45);animation:spPop .6s cubic-bezier(.2,.85,.2,1)}
+  .sp-title{font-size:27px;font-weight:800;margin-top:20px;letter-spacing:.3px;text-shadow:0 2px 12px rgba(0,0,0,.4)}
+  .sp-tag{font-size:12px;opacity:.92;margin-top:8px;letter-spacing:1.8px;text-transform:uppercase}
+  .sp-spin{width:30px;height:30px;margin:26px auto 0;border:3px solid rgba(255,255,255,.28);border-top-color:#fff;border-radius:50%;animation:spSpin .8s linear infinite}
+  @keyframes spSpin{to{transform:rotate(360deg)}}
+  @keyframes spPop{0%{transform:scale(.55);opacity:0}100%{transform:scale(1);opacity:1}}
+  @keyframes spFade{from{opacity:0}to{opacity:1}}
 
   #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:13px 19px;border-radius:13px;z-index:200;font-weight:600;box-shadow:0 12px 34px rgba(0,0,0,.4)}
 
@@ -129,6 +143,16 @@
 </head>
 <body>
 
+<!-- ===== SPLASH PEMBUKA ===== -->
+<div id="splash">
+  <div class="sp-in">
+    <img src="icon-512.png" class="sp-logo" alt="Hanum Laundry">
+    <div class="sp-title">Hanum Laundry</div>
+    <div class="sp-tag">Bersih · Wangi · Rapi · Terpercaya</div>
+    <div class="sp-spin"></div>
+  </div>
+</div>
+
 <!-- ===== SAMBUNGKAN DATABASE ===== -->
 <div id="setup-view" class="gate hide">
   <div class="gate-card">
@@ -145,7 +169,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v16</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v19</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -200,7 +224,7 @@
 const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
 const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v16";
+const APP_VERSION = "v19";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -265,7 +289,7 @@ function fmtDue(p){ const d=dueDate(p); if(!d) return '-'; return d.toLocaleStri
 
 /* ----- koneksi ----- */
 function getCfg(){ return { url:(lsGet('sb_url')||SB_URL_DEFAULT||'').trim(), key:(lsGet('sb_key')||SB_KEY_DEFAULT||'').trim() }; }
-function showSetup(msg){ $('setup-view').classList.remove('hide'); $('login-view').classList.add('hide'); $('app').classList.add('hide'); if(msg)$('cfg-err').textContent=msg; }
+function showSetup(msg){ hideSplash(); $('setup-view').classList.remove('hide'); $('login-view').classList.add('hide'); $('app').classList.add('hide'); if(msg)$('cfg-err').textContent=msg; }
 function saveConnection(){
   const url=$('cfg-url').value.trim().replace(/\/+$/,''); const key=$('cfg-key').value.trim(); $('cfg-err').textContent='';
   if(!url||!key){ $('cfg-err').textContent='URL dan KUNCI wajib diisi.'; return; }
@@ -279,6 +303,7 @@ function resetConnection(){ lsDel('sb_url'); lsDel('sb_key'); location.reload();
 /* ----- boot ----- */
 window.addEventListener('DOMContentLoaded', init);
 async function init(){
+  setTimeout(hideSplash, 7000);
   const cfg=getCfg();
   if(!cfg.url||!cfg.key){ showSetup(); return; }
   try{ sb=supabase.createClient(cfg.url,cfg.key); }catch(e){ showSetup('Koneksi gagal: '+(e.message||e)); return; }
@@ -289,7 +314,7 @@ async function init(){
 }
 
 /* ----- auth ----- */
-function showLoginView(){ $('setup-view').classList.add('hide'); $('login-view').classList.remove('hide'); $('app').classList.add('hide'); }
+function showLoginView(){ hideSplash(); $('setup-view').classList.add('hide'); $('login-view').classList.remove('hide'); $('app').classList.add('hide'); }
 function showRegister(){ $('login-box').classList.add('hide'); $('reg-box').classList.remove('hide'); }
 function showLogin(){ $('reg-box').classList.add('hide'); $('login-box').classList.remove('hide'); }
 async function doLogin(){
@@ -316,7 +341,7 @@ async function afterLogin(user){
   let { data:prof } = await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
   if(!prof){ await sb.from('profiles').insert({ id:user.id, nama:(user.user_metadata?.nama)||user.email.split('@')[0], telepon:(user.user_metadata?.telepon)||'' }).select(); ({ data:prof } = await sb.from('profiles').select('*').eq('id',user.id).maybeSingle()); }
   state.profile = prof || { id:user.id, nama:user.email, role:'pelanggan' };
-  $('setup-view').classList.add('hide'); $('login-view').classList.add('hide'); $('app').classList.remove('hide');
+  hideSplash(); $('setup-view').classList.add('hide'); $('login-view').classList.add('hide'); $('app').classList.remove('hide');
   const roleLabel = state.profile.role==='owner'?'Owner':state.profile.role==='admin'?'Admin':state.profile.role==='kasir'?'Kasir':'Pelanggan';
   $('me-info').innerHTML = `<b style="color:#fff">${esc(state.profile.nama)}</b><br>${roleLabel} · ${esc(user.email)}`;
   const allow=(v)=> v==='portal' ? (state.profile.role==='pelanggan') : (isStaff() ? true : (isKasir() ? KASIR_VIEWS.includes(v) : false));
@@ -338,6 +363,15 @@ function buildMobnav(){
   else items=[['portal','🧾','Laundry Saya']];
   $('mobnav').innerHTML = items.map(([v,i,l])=>`<button class="navbtn" data-view="${v}" onclick="nav('${v}')"><span class="ico">${i}</span>${l}</button>`).join('');
 }
+function openMenu(){
+  if(!state.profile) return;
+  const allItems=[['dashboard','📊','Dashboard'],['pos','➕','Order Baru'],['orders','📋','Daftar Pesanan'],['kas','💵','Catatan Kasir'],['expenses','💸','Pengeluaran'],['customers','👤','Pelanggan'],['services','🧺','Layanan & Tarif'],['reports','📈','Laporan'],['users','🔑','Pengguna'],['portal','🧾','Laundry Saya']];
+  const allow=(v)=> v==='portal' ? (state.profile.role==='pelanggan') : (isStaff() ? true : (isKasir() ? KASIR_VIEWS.includes(v) : false));
+  const items=allItems.filter(it=>allow(it[0]));
+  openModal(`<h3>Menu</h3><div class="muted" style="font-size:12px;margin-bottom:8px">Login sebagai: <b>${esc(state.profile.nama||'-')}</b></div>
+    <div>${items.map(it=>`<button class="btn sec" style="width:100%;text-align:left;margin-bottom:8px;display:flex;align-items:center;gap:11px" onclick="closeModal();nav('${it[0]}')"><span style="font-size:18px;width:24px;text-align:center">${it[1]}</span> ${it[2]}</button>`).join('')}</div>
+    <button class="btn bad" style="width:100%;margin-top:4px;display:flex;align-items:center;gap:8px;justify-content:center" onclick="if(confirm('Keluar dari akun ini?'))doLogout()">🚪 Keluar / ganti akun</button>`);
+}
 
 async function loadLayanan(){ const { data } = await sb.from('layanan').select('*').order('kategori').order('nama'); state.layanan = data||[]; }
 
@@ -356,7 +390,7 @@ function topbar(title, extra){
   const _r = state.profile && state.profile.role;
   const _rl = _r==='owner'?'Owner':_r==='admin'?'Admin':_r==='kasir'?'Kasir':_r==='pelanggan'?'Pelanggan':'';
   const _rc = _r==='kasir'?'#b45309':_r==='owner'?'#6d28d9':_r==='admin'?'#0369a1':'#64748b';
-  return `<div class="topbar"><h2>${title} <span style="font-size:11px;font-weight:600;color:#fff;background:#16a34a;padding:2px 7px;border-radius:20px;vertical-align:middle">${APP_VERSION}</span>${_rl?` <span style="font-size:11px;font-weight:700;color:#fff;background:${_rc};padding:2px 8px;border-radius:20px;vertical-align:middle">👤 ${_rl}</span>`:''}</h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button><button class="themebtn" onclick="if(confirm('Keluar dari akun ini?'))doLogout()" title="Keluar / ganti akun" style="color:var(--bad)">🚪</button></div></div>`;
+  return `<div class="topbar"><h2>${title} <span style="font-size:11px;font-weight:600;color:#fff;background:#16a34a;padding:2px 7px;border-radius:20px;vertical-align:middle">${APP_VERSION}</span>${_rl?` <span style="font-size:11px;font-weight:700;color:#fff;background:${_rc};padding:2px 8px;border-radius:20px;vertical-align:middle">👤 ${_rl}</span>`:''}</h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="openMenu()" title="Menu lengkap">☰</button><button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button><button class="themebtn" onclick="if(confirm('Keluar dari akun ini?'))doLogout()" title="Keluar / ganti akun" style="color:var(--bad)">🚪</button></div></div>`;
 }
 function emptyState(ico,msg){ return `<div class="empty"><div class="e-ico">${ico}</div>${esc(msg)}</div>`; }
 function skelRows(n){ let s=''; for(let i=0;i<n;i++) s+=`<div class="skel" style="height:46px;margin-bottom:8px"></div>`; return s; }
@@ -369,16 +403,15 @@ async function renderDashboard(){
        <div class="card" style="margin-top:14px"><div class="skel" style="height:200px"></div></div>`;
 
   const yearStart = new Date(new Date().getFullYear(),0,1).toISOString();
-  const { data } = await sb.from('pesanan').select('total,status,created_at,pelanggan_id,pelanggan_nama').order('created_at',{ascending:false}).limit(5000);
-  if(_seq!==state.navSeq) return;
-  const all = data||[]; state.allOrders=all;
-  const valid = all.filter(p=>p.status!=='batal');
   const _mStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toLocaleDateString('en-CA');
-  const [{ data:expRows }, { data:kasOutRows }] = await Promise.all([
+  const [{ data }, { data:expRows }, { data:kasOutRows }] = await Promise.all([
+    sb.from('pesanan').select('total,status,created_at,pelanggan_id,pelanggan_nama').order('created_at',{ascending:false}).limit(5000),
     sb.from('pengeluaran').select('total,status').gte('tanggal', _mStart).neq('status','batal'),
     sb.from('kas').select('nominal,jenis').gte('tanggal', _mStart).eq('jenis','keluar')
   ]);
   if(_seq!==state.navSeq) return;
+  const all = data||[]; state.allOrders=all;
+  const valid = all.filter(p=>p.status!=='batal');
   const expBulan = (expRows||[]).reduce((a,x)=>a+(x.total||0),0) + (kasOutRows||[]).reduce((a,k)=>a+(k.nominal||0),0);
 
   const now=new Date();
@@ -640,10 +673,14 @@ async function loadOrders(){
   }</tbody></table>`;
 }
 async function openOrder(id){
-  const { data:p } = await sb.from('pesanan').select('*').eq('id',id).single();
-  if(!p){ toast('Pesanan tidak ditemukan.'); return; }
-  const { data:items } = await sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at');
-  const { data:logs } = await sb.from('status_log').select('*').eq('pesanan_id',id).order('created_at');
+  openModal(modalSkel());
+  const [pr,ir,lr] = await Promise.all([
+    sb.from('pesanan').select('*').eq('id',id).single(),
+    sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'),
+    sb.from('status_log').select('*').eq('pesanan_id',id).order('created_at')
+  ]);
+  const p=pr.data; if(!p){ closeModal(); toast('Pesanan tidak ditemukan.'); return; }
+  const items=ir.data, logs=lr.data;
   let phone=''; if(p.pelanggan_id){ const { data:c } = await sb.from('pelanggan').select('telepon').eq('id',p.pelanggan_id).maybeSingle(); phone=c?.telepon||''; }
   const ds=dispStatus(p);
   const stepHTML = (ds==='batal') ? '' : DISP_STEPS.map(s=>{ const i=DISP_STEPS.indexOf(ds), j=DISP_STEPS.indexOf(s); let st=''; if(j<i)st='color:#fff;background:#16a34a;border-color:#16a34a'; else if(j===i){const o=STATUS[s];st=`color:${o.color};background:${o.bg};border-color:${o.bg}`;} return `<span class="s" style="${st}">${esc(STATUS[s].label)}</span>`; }).join('');
@@ -669,7 +706,7 @@ async function openOrder(id){
   notaMsg+=SITE_URL+'/?daftar=1\n\n';
   notaMsg+='Buka link di atas, lalu daftar / login pakai nomor WhatsApp ini.\n\n';
   notaMsg+='Terima kasih sudah mempercayakan cucian Anda ke *Hanum Laundry* 🙏';
-  openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">${esc(p.pelanggan_nama||'-')} · Lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div><div>${statusPill(ds)}</div></div>
+  modalBody(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">${esc(p.pelanggan_nama||'-')} · Lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div><div>${statusPill(ds)}</div></div>
     ${p.perlu_timbang?`<div class="card" style="background:#fef3c7;border-color:#fde68a;margin-top:10px;padding:11px 13px"><b style="color:#b45309">🆕 Pesanan online dari pelanggan</b><div style="font-size:12px;color:#92400e">Belum ditimbang. Tekan "⚖️ Timbang & Rekap" untuk isi berat & total.</div></div>`:''}
     ${stepHTML?`<div class="steps">${stepHTML}</div>`:''}
     <div style="margin:8px 0">${itemRows||'<span class="muted">—</span>'}</div>
@@ -693,13 +730,17 @@ function waLink(phone,msg){ let p=(phone||'').replace(/[^0-9]/g,''); if(p.starts
 async function markSelesai(id){ const { error }=await sb.from('pesanan').update({status:'selesai'}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } await sb.from('status_log').insert({pesanan_id:id,status:'selesai',oleh:state.profile.nama}); closeModal(); toast('Pesanan ditandai selesai.'); if(state.view==='orders')loadOrders(); else if(state.view==='dashboard')renderDashboard(); }
 async function markPaid(id){ const { error }=await sb.from('pesanan').update({status_bayar:'lunas'}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } closeModal(); toast('Ditandai lunas.'); if(state.view==='orders')loadOrders(); }
 async function cancelOrder(id){ if(!confirm('Batalkan pesanan ini? Tidak masuk omzet.')) return; const { error }=await sb.from('pesanan').update({status:'batal'}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } await sb.from('status_log').insert({pesanan_id:id,status:'batal',oleh:state.profile.nama}); closeModal(); toast('Dibatalkan.'); if(state.view==='orders')loadOrders(); else if(state.view==='dashboard')renderDashboard(); }
-async function reprint(id){ const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single(); const { data:items }=await sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'); if(!p)return; printStruk(p,(items||[]).map(it=>({nama:it.nama_layanan,qty:it.qty,satuan:it.satuan,subtotal:it.subtotal}))); }
+async function reprint(id){ const [pr,ir]=await Promise.all([sb.from('pesanan').select('*').eq('id',id).single(), sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at')]); const p=pr.data; if(!p)return; printStruk(p,(ir.data||[]).map(it=>({nama:it.nama_layanan,qty:it.qty,satuan:it.satuan,subtotal:it.subtotal}))); }
 
 /* ----- timbang & rekap: finalisasi order pesanan online pelanggan ----- */
 function findVarianByNama(nama){ for(const p of PAKET){ if(p.varian){ for(const v of p.varian){ if((p.nama+' · '+v.label)===nama) return {harga:v.harga,min:v.min,jam:v.jam}; } } } return null; }
-async function openTimbang(id){ const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single(); const { data:items }=await sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'); if(!p){ toast('Tidak ditemukan.'); return; } timbangForm(p, items||[]); }
+function findKhususByNama(nama){ const p=PAKET.find(x=>x.key==='harga_khusus'); if(p&&p.item){ const it=p.item.find(i=>i.label===nama); if(it) return {min:it.min,max:it.max,jam:p.jam}; } return null; }
+let coCatatan='';
+async function openTimbang(id){ openModal(modalSkel()); const [pr,ir]=await Promise.all([sb.from('pesanan').select('*').eq('id',id).single(), sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at')]); if(!pr.data){ closeModal(); toast('Tidak ditemukan.'); return; } timbangForm(pr.data, ir.data||[]); }
 function timbangForm(p, items){
-  const it=(items&&items[0])||{}; const f=findVarianByNama(it.nama_layanan)||{}; const harga=it.harga||f.harga||0; const min=f.min||0; const jam=f.jam||0;
+  const it=(items&&items[0])||{};
+  const _kh=findKhususByNama(it.nama_layanan); if(_kh){ timbangFormSatuan(p, it, _kh); return; }
+  const f=findVarianByNama(it.nama_layanan)||{}; const harga=it.harga||f.harga||0; const min=f.min||0; const jam=f.jam||0;
   openModal(`<h3>⚖️ Timbang & Rekap</h3>
     <div class="muted" style="font-size:13px">${esc(p.nomor_invoice)} · ${esc(p.pelanggan_nama||'-')}</div>
     <div style="margin:10px 0"><b>${esc(it.nama_layanan||'-')}</b><br><span class="muted" style="font-size:12px">${rp(harga)}/kg · min ${min} kg</span></div>
@@ -724,6 +765,39 @@ async function saveTimbang(pesananId, itemId, harga, min, jam){
   try{
     if(itemId){ const { error:e1 }=await sb.from('pesanan_item').update({qty:bil,subtotal:sub}).eq('id',itemId); if(e1) throw e1; }
     const { error:e2 }=await sb.from('pesanan').update({subtotal:sub,diskon:diskon,total:total,perlu_timbang:false,estimasi_ts:estTs.toISOString(),estimasi_selesai:estTs.toLocaleDateString('en-CA')}).eq('id',pesananId); if(e2) throw e2;
+    await sb.from('status_log').insert({pesanan_id:pesananId,status:'proses',oleh:state.profile.nama});
+    closeModal(); toast('Tersimpan & diproses.'); if(state.view==='orders')loadOrders(); else if(state.view==='dashboard')renderDashboard();
+  }catch(e){ toast('Gagal: '+(e.message||e)); }
+}
+
+/* ----- timbang versi per-item (Harga Khusus dari pesanan online) ----- */
+function timbangFormSatuan(p, it, kh){
+  const harga=it.harga||kh.min||0; const jam=kh.jam||0;
+  openModal(`<h3>\u2696\ufe0f Cek & Rekap (per item)</h3>
+    <div class="muted" style="font-size:13px">${esc(p.nomor_invoice)} \u00b7 ${esc(p.pelanggan_nama||'-')}</div>
+    <div style="margin:10px 0"><b>${esc(it.nama_layanan||'-')}</b><br><span class="muted" style="font-size:12px">Kisaran ${rp(kh.min)} \u2013 ${rp(kh.max)}/item</span></div>
+    <div class="row"><div style="flex:1"><label>Jumlah (pcs)</label><input id="tb-qty" type="number" min="1" step="1" value="1" oninput="timbangCalcSatuan()" style="font-weight:700;text-align:center"></div>
+      <div style="flex:1"><label>Harga / item (Rp)</label><input id="tb-harga" type="number" min="0" value="${harga}" oninput="timbangCalcSatuan()"></div></div>
+    <div style="margin:8px 0 4px"><label>Diskon (%)</label><input id="tb-diskon" type="number" min="0" max="100" value="0" oninput="timbangCalcSatuan()" style="max-width:140px"></div>
+    <div class="totline grand" style="margin-top:8px"><span>Total</span><span id="tb-total">${rp(harga)}</span></div>
+    <div class="row" style="margin-top:12px"><button class="btn ok" onclick="saveTimbangSatuan('${p.id}','${it.id}',${jam})">Simpan & Proses</button><button class="btn sec" onclick="closeModal()">Batal</button></div>`);
+  timbangCalcSatuan();
+}
+function timbangCalcSatuan(){
+  const qty=Math.max(0,Number($('tb-qty')?.value)||0); const harga=Math.round(Number($('tb-harga')?.value)||0);
+  let pct=Number($('tb-diskon')?.value)||0; if(pct<0)pct=0; if(pct>100)pct=100;
+  const sub=Math.round(harga*qty); const total=sub-Math.round(sub*pct/100);
+  const t=$('tb-total'); if(t) t.textContent=rp(total);
+}
+async function saveTimbangSatuan(pesananId, itemId, jam){
+  const qty=Math.max(0,Number($('tb-qty')?.value)||0); const harga=Math.round(Number($('tb-harga')?.value)||0);
+  if(qty<=0){ toast('Isi jumlah (pcs).'); return; }
+  let pct=Number($('tb-diskon')?.value)||0; if(pct<0)pct=0; if(pct>100)pct=100;
+  const sub=Math.round(harga*qty); const diskon=Math.round(sub*pct/100); const total=sub-diskon;
+  const estTs=new Date(Date.now()+(jam||0)*3600000);
+  try{
+    if(itemId){ const { error:e1 }=await sb.from('pesanan_item').update({qty,satuan:'pcs',harga,subtotal:sub}).eq('id',itemId); if(e1) throw e1; }
+    const { error:e2 }=await sb.from('pesanan').update({subtotal:sub,diskon,total,perlu_timbang:false,estimasi_ts:estTs.toISOString(),estimasi_selesai:estTs.toLocaleDateString('en-CA')}).eq('id',pesananId); if(e2) throw e2;
     await sb.from('status_log').insert({pesanan_id:pesananId,status:'proses',oleh:state.profile.nama});
     closeModal(); toast('Tersimpan & diproses.'); if(state.view==='orders')loadOrders(); else if(state.view==='dashboard')renderDashboard();
   }catch(e){ toast('Gagal: '+(e.message||e)); }
@@ -1085,7 +1159,7 @@ async function renderUsers(){
   const rolePill=r=>({owner:'<span class="pill" style="color:#6d28d9;background:#ede9fe"><span class="dot"></span>Owner</span>',admin:'<span class="pill" style="color:#0369a1;background:#e0f2fe"><span class="dot"></span>Admin</span>',kasir:'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Kasir</span>',pelanggan:'<span class="pill" style="color:#64748b;background:#e2e8f0"><span class="dot"></span>Pelanggan</span>'}[r]||r);
   t.innerHTML=`<table><thead><tr><th>Nama</th><th>Peran</th><th>Ubah peran</th></tr></thead><tbody>${(data||[]).map(u=>{ const self=u.id===state.me.id;
     const opts=['owner','admin','kasir','pelanggan'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('');
-    return `<tr><td><b>${esc(u.nama)}</b>${self?' <span class="muted">(Anda)</span>':''}<br><span class="muted" style="font-size:12px">${esc(u.telepon||'')}</span></td><td>${rolePill(u.role)}</td><td>${self?'<span class="muted">—</span>':`<select onchange="setRole('${u.id}',this.value)" style="max-width:140px">${opts}</select>`}</td></tr>`; }).join('')}</tbody></table>`;
+    return `<tr><td><b>${esc(u.nama)}</b>${self?' <span class="muted">(Anda)</span>':''}<br><span class="muted" style="font-size:12px">${esc(u.telepon||'')}</span></td><td>${rolePill(u.role)}</td><td>${self?'<span class="muted" style="font-size:11px">peran sendiri tak bisa diubah —<br>ubah dari akun owner/admin lain</span>':`<select onchange="setRole('${u.id}',this.value)" style="max-width:140px">${opts}</select>`}</td></tr>`; }).join('')}</tbody></table>`;
 }
 async function setRole(id,role){ if(!confirm('Ubah peran menjadi '+role+'?')){ renderUsers(); return; } const { error }=await sb.from('profiles').update({role}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } toast('Peran diubah.'); renderUsers(); }
 
@@ -1124,32 +1198,48 @@ async function savePortalPhone(){
   state.profile.telepon=v; toast('Nomor tersimpan.'); renderPortal();
 }
 function portalCheckout(){
-  let body=`<h3>Pesan Laundry</h3><p class="muted" style="margin-top:0;font-size:13px">Pilih paket. <b>Berat & total dihitung petugas</b> saat baju ditimbang — Anda bayar di tempat.</p>
-    <div style="margin:8px 0 6px"><label>Catatan (opsional)</label><input id="co-catatan" placeholder="cth: pewangi extra, baju putih dipisah"></div>`;
-  PAKET.filter(p=>p.tipe==='kiloan').forEach(p=>{
-    body+=`<div style="font-weight:700;margin:10px 0 4px">${p.ikon} ${esc(p.nama)}</div>`;
-    p.varian.forEach(v=>{ body+=`<button class="btn sec" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:10px" onclick="submitCheckout('${esc(p.nama)} · ${esc(v.label)}',${v.harga})"><span>${esc(v.label)}<br><span class="muted" style="font-size:12px">min ${v.min} kg</span></span><span style="color:var(--brand);font-weight:800">${rp(v.harga)}/kg</span></button>`; });
-  });
+  let body=`<h3>Pesan Laundry</h3><p class="muted" style="margin-top:0;font-size:13px">Pilih jenis layanan. <b>Berat/jumlah & total dihitung petugas</b> saat baju dicek \u2014 bayar di tempat.</p>
+    <div style="margin:8px 0 12px"><label>Catatan (opsional)</label><input id="co-catatan" placeholder="cth: pewangi extra, baju putih dipisah" value="${esc(coCatatan)}"></div>
+    <div class="svc">`;
+  PAKET.forEach(p=>{ body+=`<button onclick="coPickCat('${p.key}')"><div class="nm">${p.ikon} ${esc(p.nama)}</div><div class="muted" style="font-size:12px">${p.tipe==='kiloan'?'per kg \u00b7 pilih durasi':'per item'}</div><div class="pr">Pilih \u203a</div></button>`; });
+  body+=`</div>`;
+  openModal(body);
+}
+function coPickCat(key){
+  coCatatan=($('co-catatan')?.value||'').trim();
+  const p=PAKET.find(x=>x.key===key); if(!p) return;
+  let body=`<h3>${p.ikon} ${esc(p.nama)}</h3>`;
+  if(p.tipe==='kiloan'){
+    body+=`<p class="muted" style="margin-top:0;font-size:13px">Pilih durasi:</p>`;
+    body+=p.varian.map(v=>`<button class="btn sec" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:10px" onclick="submitCheckout('${esc(p.nama)} \u00b7 ${esc(v.label)}',${v.harga})"><span>${esc(v.label)}<br><span class="muted" style="font-size:12px">min ${v.min} kg</span></span><span style="color:var(--brand);font-weight:800">${rp(v.harga)}/kg</span></button>`).join('');
+  } else {
+    body+=`<p class="muted" style="margin-top:0;font-size:13px">Pilih barang. Harga final ditentukan petugas saat dicek:</p>`;
+    body+=p.item.map(it=>`<button class="btn sec" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:10px" onclick="submitCheckout('${esc(it.label)}',${it.min})"><span>${esc(it.label)}</span><span style="color:var(--brand);font-weight:700;font-size:13px">${rp(it.min)} \u2013 ${rp(it.max)}</span></button>`).join('');
+  }
+  body+=`<button class="btn sec sm" style="margin-top:8px" onclick="portalCheckout()">\u2190 Kembali</button>`;
   openModal(body);
 }
 async function submitCheckout(nama, harga){
-  const catatan=($('co-catatan')?.value||'').trim();
-  if(!confirm('Pesan "'+nama+'"?\nBerat & total akan dihitung petugas saat baju ditimbang.')) return;
-  const { data, error } = await sb.rpc('pesan_pelanggan', { p_paket:nama, p_harga:harga, p_catatan:catatan });
+  if(!confirm('Pesan "'+nama+'"?\nBerat/jumlah & total akan dihitung petugas saat baju dicek.')) return;
+  const { data, error } = await sb.rpc('pesan_pelanggan', { p_paket:nama, p_harga:harga, p_catatan:coCatatan });
   if(error){ toast('Gagal: '+error.message); return; }
-  closeModal(); toast('Pesanan terkirim! Nota: '+(data||'-')); renderPortal();
+  coCatatan=''; closeModal(); toast('Pesanan terkirim! Nota: '+(data||'-')); renderPortal();
 }
 async function openPortalOrder(id){
-  const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single();
-  if(!p){ toast('Tidak ditemukan.'); return; }
-  const { data:items }=await sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at');
-  const { data:logs }=await sb.from('status_log').select('*').eq('pesanan_id',id).order('created_at');
+  openModal(modalSkel());
+  const [pr,ir,lr]=await Promise.all([
+    sb.from('pesanan').select('*').eq('id',id).single(),
+    sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'),
+    sb.from('status_log').select('*').eq('pesanan_id',id).order('created_at')
+  ]);
+  const p=pr.data; if(!p){ closeModal(); toast('Tidak ditemukan.'); return; }
+  const items=ir.data, logs=lr.data;
   const ds=dispStatus(p);
   const stepHTML=(ds==='batal')?'':DISP_STEPS.map(s=>{ const i=DISP_STEPS.indexOf(ds), j=DISP_STEPS.indexOf(s); let st=''; if(j<i)st='color:#fff;background:#16a34a;border-color:#16a34a'; else if(j===i){const o=STATUS[s];st=`color:${o.color};background:${o.bg};border-color:${o.bg}`;} return `<span class="s" style="${st}">${esc(STATUS[s].label)}</span>`; }).join('');
   const itemRows=(items||[]).map(it=>`<div class="r2" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(it.nama_layanan)} <span class="muted">${it.qty}${esc(it.satuan)}</span></span><b>${rp(it.subtotal)}</b></div>`).join('');
   const beratKg=(items||[]).filter(it=>(it.satuan||'').toLowerCase()==='kg').reduce((a,it)=>a+Number(it.qty||0),0);
   const timeline=(logs||[]).map(l=>`<div class="muted" style="font-size:12px">${new Date(l.created_at).toLocaleString('id-ID')} — ${esc(STATUS[l.status]?.label||l.status)}</div>`).join('');
-  openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">Kode lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div>${p.perlu_timbang?'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Menunggu ditimbang</span>':statusPill(ds)}</div>
+  modalBody(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">Kode lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div>${p.perlu_timbang?'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Menunggu ditimbang</span>':statusPill(ds)}</div>
     ${p.perlu_timbang?`<div class="card" style="background:#fef3c7;border-color:#fde68a;margin-top:10px;padding:11px 13px"><b style="color:#b45309">Pesanan diterima 🙌</b><div style="font-size:12px;color:#92400e">Total muncul setelah baju Anda ditimbang petugas. Silakan antar baju ke Hanum Laundry.</div></div>`:''}
     ${(stepHTML&&!p.perlu_timbang)?`<div class="steps">${stepHTML}</div>`:''}
     <div style="margin:8px 0">${itemRows||'<span class="muted">—</span>'}</div>
@@ -1162,8 +1252,11 @@ async function openPortalOrder(id){
 }
 
 /* ============================================================ MODAL ============================================================ */
-function openModal(html){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal">${html}<button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
+function openModal(html){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal"><div id="modal-body">${html}</div><button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
+function modalBody(html){ const b=$('modal-body'); if(b) b.innerHTML=html; }
+function modalSkel(){ return `<div class="skel" style="height:26px;width:55%;margin-bottom:14px"></div><div class="skel" style="height:54px;margin-bottom:10px"></div><div class="skel" style="height:96px;margin-bottom:10px"></div><div class="skel" style="height:40px;width:70%"></div>`; }
 function closeModal(){ $('modal-root').innerHTML=''; }
+function hideSplash(){ const s=$('splash'); if(s&&!s.classList.contains('off')){ s.classList.add('off'); setTimeout(()=>{ if(s.parentNode) s.style.display='none'; },500); } }
 
 /* ============================================================ PWA ============================================================ */
 let deferredPrompt=null;
