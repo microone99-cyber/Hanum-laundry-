@@ -145,7 +145,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v10</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v11</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -200,7 +200,7 @@
 const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
 const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -317,29 +317,35 @@ async function afterLogin(user){
   if(!prof){ await sb.from('profiles').insert({ id:user.id, nama:(user.user_metadata?.nama)||user.email.split('@')[0], telepon:(user.user_metadata?.telepon)||'' }).select(); ({ data:prof } = await sb.from('profiles').select('*').eq('id',user.id).maybeSingle()); }
   state.profile = prof || { id:user.id, nama:user.email, role:'pelanggan' };
   $('setup-view').classList.add('hide'); $('login-view').classList.add('hide'); $('app').classList.remove('hide');
-  const roleLabel = state.profile.role==='owner'?'Owner':state.profile.role==='admin'?'Admin/Kasir':'Pelanggan';
+  const roleLabel = state.profile.role==='owner'?'Owner':state.profile.role==='admin'?'Admin':state.profile.role==='kasir'?'Kasir':'Pelanggan';
   $('me-info').innerHTML = `<b style="color:#fff">${esc(state.profile.nama)}</b><br>${roleLabel} · ${esc(user.email)}`;
-  const staff = isStaff();
-  document.querySelectorAll('.staff').forEach(b=> b.style.display = staff?'':'none');
-  document.querySelectorAll('.cust').forEach(b=> b.classList.toggle('hide', staff));
+  const allow=(v)=> v==='portal' ? (state.profile.role==='pelanggan') : (isStaff() ? true : (isKasir() ? KASIR_VIEWS.includes(v) : false));
+  document.querySelectorAll('#side .navbtn[data-view]').forEach(b=> b.classList.toggle('hide', !allow(b.dataset.view)));
   buildMobnav();
-  if(staff){ await loadLayanan(); nav('dashboard'); } else { nav('portal'); }
+  if(isStaff()){ await loadLayanan(); nav('dashboard'); }
+  else if(isKasir()){ nav('pos'); }
+  else { nav('portal'); }
 }
+const KASIR_VIEWS = ['pos','orders','customers','kas'];
 const isOwner = () => state.profile && state.profile.role==='owner';
 const isStaff = () => state.profile && (state.profile.role==='owner' || state.profile.role==='admin');
+const isKasir = () => state.profile && state.profile.role==='kasir';
 
 function buildMobnav(){
-  const items = isStaff()
-    ? [['dashboard','📊','Home'],['pos','➕','Order'],['orders','📋','Pesanan'],['expenses','💸','Biaya'],['kas','💵','Kas'],['reports','📈','Laporan']]
-    : [['portal','🧾','Laundry Saya']];
+  let items;
+  if(isStaff()) items=[['dashboard','📊','Home'],['pos','➕','Order'],['orders','📋','Pesanan'],['expenses','💸','Biaya'],['kas','💵','Kas'],['reports','📈','Laporan']];
+  else if(isKasir()) items=[['pos','➕','Order'],['orders','📋','Pesanan'],['customers','👤','Pelanggan'],['kas','💵','Kas']];
+  else items=[['portal','🧾','Laundry Saya']];
   $('mobnav').innerHTML = items.map(([v,i,l])=>`<button class="navbtn" data-view="${v}" onclick="nav('${v}')"><span class="ico">${i}</span>${l}</button>`).join('');
 }
 
 async function loadLayanan(){ const { data } = await sb.from('layanan').select('*').order('kategori').order('nama'); state.layanan = data||[]; }
 
 function nav(view){
-  if(!isStaff() && view!=='portal'){ view='portal'; }
-  if((view==='services'||view==='users'||view==='kas'||view==='reports'||view==='customers'||view==='expenses') && !isStaff()){ toast('Khusus staf.'); return; }
+  const _r = state.profile && state.profile.role;
+  if(_r==='pelanggan'){ if(view!=='portal') view='portal'; }
+  else if(_r==='kasir'){ if(!KASIR_VIEWS.includes(view)){ if(view!=='pos') toast('Menu ini khusus owner/admin.'); view='pos'; } }
+  else { if(view==='portal') view='dashboard'; }
   state.view=view; state.navSeq=(state.navSeq||0)+1;
   document.querySelectorAll('.navbtn').forEach(b=> b.classList.toggle('active', b.dataset.view===view));
   $('main').scrollTop=0;
@@ -974,12 +980,12 @@ async function loadReport(){
 
 /* ============================================================ PENGGUNA ============================================================ */
 async function renderUsers(){
-  $('main').innerHTML = topbar('Pengguna') + `<div class="card"><p class="muted" style="margin-top:0"><b>Owner</b> & <b>Admin</b> akses penuh operasional. <b>Pelanggan</b> hanya lihat laundry miliknya. Akun baru dibuat lewat halaman Daftar.</p><div id="usr-tbl">${skelRows(4)}</div></div>`;
+  $('main').innerHTML = topbar('Pengguna') + `<div class="card"><p class="muted" style="margin-top:0"><b>Owner</b> & <b>Admin</b>: akses penuh. <b>Kasir</b>: hanya Order, Pesanan, Pelanggan, Kas (tidak lihat Dashboard/Laporan/untung). <b>Pelanggan</b>: hanya lihat laundry miliknya. Akun baru dibuat lewat halaman Daftar, lalu set perannya di sini.</p><div id="usr-tbl">${skelRows(4)}</div></div>`;
   const { data, error } = await sb.from('profiles').select('*').order('created_at'); const t=$('usr-tbl'); if(!t) return;
   if(error){ t.innerHTML=emptyState('⚠️','Gagal: '+error.message); return; }
-  const rolePill=r=>({owner:'<span class="pill" style="color:#6d28d9;background:#ede9fe"><span class="dot"></span>Owner</span>',admin:'<span class="pill" style="color:#0369a1;background:#e0f2fe"><span class="dot"></span>Admin</span>',pelanggan:'<span class="pill" style="color:#64748b;background:#e2e8f0"><span class="dot"></span>Pelanggan</span>'}[r]||r);
+  const rolePill=r=>({owner:'<span class="pill" style="color:#6d28d9;background:#ede9fe"><span class="dot"></span>Owner</span>',admin:'<span class="pill" style="color:#0369a1;background:#e0f2fe"><span class="dot"></span>Admin</span>',kasir:'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Kasir</span>',pelanggan:'<span class="pill" style="color:#64748b;background:#e2e8f0"><span class="dot"></span>Pelanggan</span>'}[r]||r);
   t.innerHTML=`<table><thead><tr><th>Nama</th><th>Peran</th><th>Ubah peran</th></tr></thead><tbody>${(data||[]).map(u=>{ const self=u.id===state.me.id;
-    const opts=['owner','admin','pelanggan'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('');
+    const opts=['owner','admin','kasir','pelanggan'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('');
     return `<tr><td><b>${esc(u.nama)}</b>${self?' <span class="muted">(Anda)</span>':''}<br><span class="muted" style="font-size:12px">${esc(u.telepon||'')}</span></td><td>${rolePill(u.role)}</td><td>${self?'<span class="muted">—</span>':`<select onchange="setRole('${u.id}',this.value)" style="max-width:140px">${opts}</select>`}</td></tr>`; }).join('')}</tbody></table>`;
 }
 async function setRole(id,role){ if(!confirm('Ubah peran menjadi '+role+'?')){ renderUsers(); return; } const { error }=await sb.from('profiles').update({role}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } toast('Peran diubah.'); renderUsers(); }
