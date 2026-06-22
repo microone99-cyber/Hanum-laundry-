@@ -100,7 +100,7 @@
   .totline{display:flex;justify-content:space-between;padding:5px 0}
   .totline.grand{font-size:21px;font-weight:800;border-top:2px solid var(--ink);margin-top:7px;padding-top:11px}
 
-  .ovl{position:fixed;inset:0;background:rgba(2,6,23,.6);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100;backdrop-filter:blur(2px)}
+  .ovl{position:fixed;inset:0;background:rgba(2,6,23,.66);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100}
   .modal{background:var(--panel);border-radius:18px;padding:22px;width:100%;max-width:480px;max-height:90vh;overflow:auto;box-shadow:0 30px 70px rgba(0,0,0,.4)}
 
   #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:13px 19px;border-radius:13px;z-index:200;font-weight:600;box-shadow:0 12px 34px rgba(0,0,0,.4)}
@@ -145,7 +145,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry</div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v17</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -197,9 +197,10 @@
 /* ============================================================
    HANUM LAUNDRY — v04 (Tahap 1)
    ============================================================ */
-const SB_URL_DEFAULT = "";
-const SB_KEY_DEFAULT = "";
+const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
+const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
+const APP_VERSION = "v17";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -283,7 +284,7 @@ async function init(){
   try{ sb=supabase.createClient(cfg.url,cfg.key); }catch(e){ showSetup('Koneksi gagal: '+(e.message||e)); return; }
   try{
     const { data:{ session } } = await sb.auth.getSession();
-    if(session){ await afterLogin(session.user); } else { showLoginView(); }
+    if(session){ await afterLogin(session.user); } else { showLoginView(); try{ if(new URLSearchParams(location.search).has('daftar')) showRegister(); }catch(e){} }
   }catch(e){ showSetup('Tidak bisa menghubungi database. Cek URL & KUNCI. ('+(e.message||e)+')'); }
 }
 
@@ -316,36 +317,56 @@ async function afterLogin(user){
   if(!prof){ await sb.from('profiles').insert({ id:user.id, nama:(user.user_metadata?.nama)||user.email.split('@')[0], telepon:(user.user_metadata?.telepon)||'' }).select(); ({ data:prof } = await sb.from('profiles').select('*').eq('id',user.id).maybeSingle()); }
   state.profile = prof || { id:user.id, nama:user.email, role:'pelanggan' };
   $('setup-view').classList.add('hide'); $('login-view').classList.add('hide'); $('app').classList.remove('hide');
-  const roleLabel = state.profile.role==='owner'?'Owner':state.profile.role==='admin'?'Admin/Kasir':'Pelanggan';
+  const roleLabel = state.profile.role==='owner'?'Owner':state.profile.role==='admin'?'Admin':state.profile.role==='kasir'?'Kasir':'Pelanggan';
   $('me-info').innerHTML = `<b style="color:#fff">${esc(state.profile.nama)}</b><br>${roleLabel} · ${esc(user.email)}`;
-  const staff = isStaff();
-  document.querySelectorAll('.staff').forEach(b=> b.style.display = staff?'':'none');
-  document.querySelectorAll('.cust').forEach(b=> b.classList.toggle('hide', staff));
+  const allow=(v)=> v==='portal' ? (state.profile.role==='pelanggan') : (isStaff() ? true : (isKasir() ? KASIR_VIEWS.includes(v) : false));
+  document.querySelectorAll('#side .navbtn[data-view]').forEach(b=> b.classList.toggle('hide', !allow(b.dataset.view)));
   buildMobnav();
-  if(staff){ await loadLayanan(); nav('dashboard'); } else { nav('portal'); }
+  if(isStaff()){ await loadLayanan(); nav('dashboard'); }
+  else if(isKasir()){ nav('pos'); }
+  else { nav('portal'); }
 }
+const KASIR_VIEWS = ['pos','orders','expenses','kas'];
 const isOwner = () => state.profile && state.profile.role==='owner';
 const isStaff = () => state.profile && (state.profile.role==='owner' || state.profile.role==='admin');
+const isKasir = () => state.profile && state.profile.role==='kasir';
 
 function buildMobnav(){
-  const items = isStaff()
-    ? [['dashboard','📊','Home'],['pos','➕','Order'],['orders','📋','Pesanan'],['expenses','💸','Biaya'],['kas','💵','Kas'],['reports','📈','Laporan']]
-    : [['portal','🧾','Laundry Saya']];
+  let items;
+  if(isStaff()) items=[['dashboard','📊','Home'],['pos','➕','Order'],['orders','📋','Pesanan'],['expenses','💸','Biaya'],['kas','💵','Kas'],['reports','📈','Laporan']];
+  else if(isKasir()) items=[['pos','➕','Order'],['orders','📋','Pesanan'],['expenses','💸','Biaya'],['kas','💵','Kas']];
+  else items=[['portal','🧾','Laundry Saya']];
   $('mobnav').innerHTML = items.map(([v,i,l])=>`<button class="navbtn" data-view="${v}" onclick="nav('${v}')"><span class="ico">${i}</span>${l}</button>`).join('');
+}
+function openMenu(){
+  if(!state.profile) return;
+  const allItems=[['dashboard','📊','Dashboard'],['pos','➕','Order Baru'],['orders','📋','Daftar Pesanan'],['kas','💵','Catatan Kasir'],['expenses','💸','Pengeluaran'],['customers','👤','Pelanggan'],['services','🧺','Layanan & Tarif'],['reports','📈','Laporan'],['users','🔑','Pengguna'],['portal','🧾','Laundry Saya']];
+  const allow=(v)=> v==='portal' ? (state.profile.role==='pelanggan') : (isStaff() ? true : (isKasir() ? KASIR_VIEWS.includes(v) : false));
+  const items=allItems.filter(it=>allow(it[0]));
+  openModal(`<h3>Menu</h3><div class="muted" style="font-size:12px;margin-bottom:8px">Login sebagai: <b>${esc(state.profile.nama||'-')}</b></div>
+    <div>${items.map(it=>`<button class="btn sec" style="width:100%;text-align:left;margin-bottom:8px;display:flex;align-items:center;gap:11px" onclick="closeModal();nav('${it[0]}')"><span style="font-size:18px;width:24px;text-align:center">${it[1]}</span> ${it[2]}</button>`).join('')}</div>
+    <button class="btn bad" style="width:100%;margin-top:4px;display:flex;align-items:center;gap:8px;justify-content:center" onclick="if(confirm('Keluar dari akun ini?'))doLogout()">🚪 Keluar / ganti akun</button>`);
 }
 
 async function loadLayanan(){ const { data } = await sb.from('layanan').select('*').order('kategori').order('nama'); state.layanan = data||[]; }
 
 function nav(view){
-  if(!isStaff() && view!=='portal'){ view='portal'; }
-  if((view==='services'||view==='users'||view==='kas'||view==='reports'||view==='customers'||view==='expenses') && !isStaff()){ toast('Khusus staf.'); return; }
+  const _r = state.profile && state.profile.role;
+  if(_r==='pelanggan'){ if(view!=='portal') view='portal'; }
+  else if(_r==='kasir'){ if(!KASIR_VIEWS.includes(view)){ if(view!=='pos') toast('Menu ini khusus owner/admin.'); view='pos'; } }
+  else { if(view==='portal') view='dashboard'; }
   state.view=view; state.navSeq=(state.navSeq||0)+1;
   document.querySelectorAll('.navbtn').forEach(b=> b.classList.toggle('active', b.dataset.view===view));
   $('main').scrollTop=0;
   ({dashboard:renderDashboard,pos:renderPOS,orders:renderOrders,kas:renderKas,expenses:renderExpenses,customers:renderCustomers,services:renderServices,reports:renderReports,users:renderUsers,portal:renderPortal}[view]||renderDashboard)();
 }
 
-function topbar(title, extra){ return `<div class="topbar"><h2>${title}</h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button></div></div>`; }
+function topbar(title, extra){
+  const _r = state.profile && state.profile.role;
+  const _rl = _r==='owner'?'Owner':_r==='admin'?'Admin':_r==='kasir'?'Kasir':_r==='pelanggan'?'Pelanggan':'';
+  const _rc = _r==='kasir'?'#b45309':_r==='owner'?'#6d28d9':_r==='admin'?'#0369a1':'#64748b';
+  return `<div class="topbar"><h2>${title} <span style="font-size:11px;font-weight:600;color:#fff;background:#16a34a;padding:2px 7px;border-radius:20px;vertical-align:middle">${APP_VERSION}</span>${_rl?` <span style="font-size:11px;font-weight:700;color:#fff;background:${_rc};padding:2px 8px;border-radius:20px;vertical-align:middle">👤 ${_rl}</span>`:''}</h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="openMenu()" title="Menu lengkap">☰</button><button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button><button class="themebtn" onclick="if(confirm('Keluar dari akun ini?'))doLogout()" title="Keluar / ganti akun" style="color:var(--bad)">🚪</button></div></div>`;
+}
 function emptyState(ico,msg){ return `<div class="empty"><div class="e-ico">${ico}</div>${esc(msg)}</div>`; }
 function skelRows(n){ let s=''; for(let i=0;i<n;i++) s+=`<div class="skel" style="height:46px;margin-bottom:8px"></div>`; return s; }
 
@@ -389,7 +410,7 @@ async function renderDashboard(){
   const icoBox=(c,bg)=>`<span class="ico" style="background:${bg};color:${c}">`;
   m.innerHTML = topbar('Dashboard', `<button class="btn" onclick="nav('pos')">+ Order Baru</button>`)
    + `<div class="stats">
-        <div class="card stat">${icoBox('#15803d','#dcfce7')}💰</span><div class="lbl">Omzet hari ini</div><div class="big">${rp(omzetHari)}</div></div>
+        <div class="card stat" style="cursor:pointer" onclick="openPeriode('hari')">${icoBox('#15803d','#dcfce7')}💰</span><div class="lbl">Omzet hari ini ›</div><div class="big">${rp(omzetHari)}</div></div>
         <div class="card stat" style="cursor:pointer" onclick="openPeriode('bulan')">${icoBox('#6d28d9','#ede9fe')}🗓️</span><div class="lbl">Omzet bulan ini ›</div><div class="big">${rp(omzetBulan)}</div></div>
         <div class="card stat" style="cursor:pointer" onclick="openPeriode('tahun')">${icoBox('#b45309','#fef3c7')}📈</span><div class="lbl">Omzet tahun ini ›</div><div class="big">${rp(omzetTahun)}</div></div>
       </div>
@@ -472,23 +493,24 @@ function periodeCalc(){
 
 /* ----- reset semua data transaksi (owner) ----- */
 function hapusPelangganConfirm(id,nama){
-  openModal(`<h3>Hapus Data Pelanggan</h3>
-    <p class="muted">Menghapus <b>semua pesanan</b> milik <b>${esc(nama)}</b> beserta riwayatnya, dan data pelanggannya. Semua total (Dashboard, Pesanan, Laporan) otomatis menyesuaikan. <b>Tidak bisa dibatalkan.</b></p>
-    <div class="row" style="margin-top:12px"><button class="btn bad" onclick="hapusPelangganData(${id?`'${id}'`:'null'},'${esc(nama).replace(/'/g,"\\'")}')">Hapus data</button><button class="btn sec" onclick="closeModal()">Tutup</button></div>`);
+  if(!id){ toast('Pelanggan ini belum tersimpan terpisah (hanya nama dari pesanan).'); return; }
+  openModal(`<h3>Hapus Pelanggan</h3>
+    <p class="muted">Menghapus <b>${esc(nama)}</b> dari <b>daftar pelanggan</b> saja. <b>Pesanan & riwayatnya TIDAK ikut terhapus</b>, dan semua total (Dashboard / Pesanan / Laporan) <b>tetap sama</b>.</p>
+    <div class="row" style="margin-top:12px"><button class="btn bad" onclick="hapusPelangganData('${id}','${esc(nama).replace(/'/g,"\\'")}')">Hapus pelanggan ini</button></div>`);
 }
 async function hapusPelangganData(id,nama){
   try{
-    if(id){ await sb.from('pesanan').delete().eq('pelanggan_id',id); await sb.from('pelanggan').delete().eq('id',id); }
-    else { await sb.from('pesanan').delete().eq('pelanggan_nama',nama).is('pelanggan_id',null); }
+    if(id){ const { error }=await sb.from('pelanggan').delete().eq('id',id); if(error) throw error; }
     state.pelangganCache=state.pelangganCache.filter(c=>c.id!==id);
-    closeModal(); toast('Data '+nama+' dihapus.'); renderDashboard();
+    closeModal(); toast('Pelanggan '+nama+' dihapus dari daftar.'); renderDashboard();
   }catch(e){ toast('Gagal: '+(e.message||e)); }
 }
 async function delPesanan(id){
-  if(!confirm('Hapus pesanan ini secara permanen?')) return;
+  if(!confirm('Hapus pesanan ini secara permanen? Tidak bisa dibatalkan, dan semua total ikut menyesuaikan.')) return;
   const { error }=await sb.from('pesanan').delete().eq('id',id);
   if(error){ toast('Gagal: '+error.message); return; }
-  toast('Pesanan dihapus.'); loadOrders();
+  closeModal(); toast('Pesanan dihapus.');
+  if(state.view==='dashboard') renderDashboard(); else loadOrders();
 }
 
 /* ============================================================ POS ============================================================ */
@@ -615,16 +637,15 @@ async function renderOrders(){
 async function loadOrders(){
   const myView=state.view;
   const q=($('ord-search')?.value||'').trim(); const f=$('ord-status')?.value||'aktif';
-  let query=sb.from('pesanan').select('id,nomor_invoice,kode_tracking,pelanggan_nama,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at').order('created_at',{ascending:false}).limit(100);
+  let query=sb.from('pesanan').select('id,nomor_invoice,kode_tracking,pelanggan_nama,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at,perlu_timbang').order('created_at',{ascending:false}).limit(100);
   if(f==='aktif') query=query.eq('status','proses'); else if(f!=='semua') query=query.eq('status',f);
   if(q) query=query.or(`nomor_invoice.ilike.%${q}%,pelanggan_nama.ilike.%${q}%,kode_tracking.ilike.%${q}%`);
   const { data, error } = await query; if(state.view!==myView) return; const list=$('ord-list'); if(!list) return;
   if(error){ list.innerHTML=emptyState('⚠️','Gagal memuat: '+error.message); return; }
   if(!data||!data.length){ list.innerHTML=emptyState('📭','Tidak ada pesanan.'); return; }
-  list.innerHTML=`<table><thead><tr><th>Invoice</th><th>Pelanggan</th><th>Status</th><th>Total</th><th>Bayar</th><th></th></tr></thead><tbody>${
-    data.map(p=>`<tr><td><b>${esc(p.nomor_invoice)}</b><br><span class="muted">${tglID(p.created_at)}</span></td><td>${esc(p.pelanggan_nama||'-')}</td><td>${statusPill(dispStatus(p))}</td><td>${rp(p.total)}</td>
-      <td>${p.status_bayar==='lunas'?'<span class="pill" style="color:#15803d;background:#dcfce7"><span class="dot"></span>Lunas</span>':'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Belum</span>'}</td>
-      <td><button class="btn sec sm" onclick="openOrder('${p.id}')">Buka</button> <button class="btn sec sm" onclick="delPesanan('${p.id}')" style="color:var(--bad)">Hapus</button></td></tr>`).join('')
+  list.innerHTML=`<table><thead><tr><th>Invoice</th><th>Pelanggan</th><th>Status</th><th>Total</th><th>Bayar</th></tr></thead><tbody>${
+    data.map(p=>`<tr style="cursor:pointer" onclick="openOrder('${p.id}')"><td><b>${esc(p.nomor_invoice)}</b>${p.perlu_timbang?' <span class="pill" style="color:#b45309;background:#fef3c7;font-size:10px">🆕 timbang</span>':''}<br><span class="muted">${tglID(p.created_at)}</span></td><td>${esc(p.pelanggan_nama||'-')}</td><td>${p.perlu_timbang?'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Perlu ditimbang</span>':statusPill(dispStatus(p))}</td><td>${p.perlu_timbang?'<span class="muted">—</span>':rp(p.total)}</td>
+      <td>${p.status_bayar==='lunas'?'<span class="pill" style="color:#15803d;background:#dcfce7"><span class="dot"></span>Lunas</span>':'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Belum</span>'}</td></tr>`).join('')
   }</tbody></table>`;
 }
 async function openOrder(id){
@@ -639,11 +660,26 @@ async function openOrder(id){
   const canSelesai=p.status==='proses', canCancel=p.status==='proses';
   const logHTML=(logs||[]).map(l=>`<div class="muted" style="font-size:12px">${new Date(l.created_at).toLocaleString('id-ID')} — ${esc(STATUS[l.status]?.label||l.status)} oleh ${esc(l.oleh||'-')}</div>`).join('');
   const showWA=(ds==='siap'||ds==='selesai');
-  const waMsg=`Halo ${p.pelanggan_nama},\n\nLaundry Anda telah selesai dan siap diambil.\n\nNomor Nota:\n${p.nomor_invoice}\n\nCek status & nota online di:\n${SITE_URL}\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏`;
-  let notaMsg='*HANUM LAUNDRY*\nNota: '+p.nomor_invoice+'\nKode lacak: '+(p.kode_tracking||'-')+'\nNama: '+p.pelanggan_nama+'\n\nRincian:\n';
-  (items||[]).forEach(it=>{ notaMsg+='- '+it.nama_layanan+' '+it.qty+it.satuan+' = '+rp(it.subtotal)+'\n'; });
-  notaMsg+='\nSubtotal: '+rp(p.subtotal)+'\nDiskon: '+rp(p.diskon)+'\nTotal: '+rp(p.total)+'\nStatus bayar: '+(p.status_bayar==='lunas'?'Lunas ('+p.metode_bayar+')':'Belum bayar')+'\nStatus: '+(STATUS[ds]?.label||ds)+'\nEstimasi selesai: '+fmtDue(p)+'\n\nCek status & nota online di:\n'+SITE_URL+'\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏';
+  const waMsg=`Halo ${p.pelanggan_nama},\n\nLaundry Anda telah selesai dan siap diambil.\n\nNomor Nota:\n${p.nomor_invoice}\n\nCek status & nota online di:\n${SITE_URL}/?daftar=1\n(Buka link, lalu daftar/login pakai nomor WhatsApp ini)\n\nTerima kasih telah menggunakan Hanum Laundry 🙏`;
+  let notaMsg='*HANUM LAUNDRY*\n\n';
+  notaMsg+='Nota: *'+p.nomor_invoice+'*\n';
+  notaMsg+='Kode lacak: *'+(p.kode_tracking||'-')+'*\n';
+  notaMsg+='Nama: '+p.pelanggan_nama+'\n\n';
+  notaMsg+='*Rincian:*\n';
+  (items||[]).forEach(it=>{ notaMsg+='• '+it.nama_layanan+' — '+it.qty+' '+it.satuan+' = '+rp(it.subtotal)+'\n'; });
+  notaMsg+='\nSubtotal: '+rp(p.subtotal)+'\n';
+  notaMsg+='Diskon: '+rp(p.diskon)+'\n';
+  notaMsg+='*Total: '+rp(p.total)+'*\n\n';
+  notaMsg+='Status bayar: *'+(p.status_bayar==='lunas'?'Lunas ('+p.metode_bayar+')':'Belum bayar')+'*\n';
+  notaMsg+='Status laundry: *'+(STATUS[ds]?.label||ds)+'*\n';
+  notaMsg+='Estimasi selesai: '+fmtDue(p)+'\n\n';
+  notaMsg+='———————————\n\n';
+  notaMsg+='*Cek status & nota online:*\n\n';
+  notaMsg+=SITE_URL+'/?daftar=1\n\n';
+  notaMsg+='Buka link di atas, lalu daftar / login pakai nomor WhatsApp ini.\n\n';
+  notaMsg+='Terima kasih sudah mempercayakan cucian Anda ke *Hanum Laundry* 🙏';
   openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">${esc(p.pelanggan_nama||'-')} · Lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div><div>${statusPill(ds)}</div></div>
+    ${p.perlu_timbang?`<div class="card" style="background:#fef3c7;border-color:#fde68a;margin-top:10px;padding:11px 13px"><b style="color:#b45309">🆕 Pesanan online dari pelanggan</b><div style="font-size:12px;color:#92400e">Belum ditimbang. Tekan "⚖️ Timbang & Rekap" untuk isi berat & total.</div></div>`:''}
     ${stepHTML?`<div class="steps">${stepHTML}</div>`:''}
     <div style="margin:8px 0">${itemRows||'<span class="muted">—</span>'}</div>
     <div class="r2"><span class="muted">Subtotal</span><span>${rp(p.subtotal)}</span></div><div class="r2"><span class="muted">Diskon</span><span>- ${rp(p.diskon)}</span></div>
@@ -653,12 +689,13 @@ async function openOrder(id){
     ${p.catatan?`<div class="muted" style="font-size:13px;margin-top:4px">Catatan: ${esc(p.catatan)}</div>`:''}
     <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">${logHTML||''}</div>
     <div class="row" style="margin-top:14px">
-      ${canSelesai?`<button class="btn ok" onclick="markSelesai('${p.id}')">✓ Tandai Selesai</button>`:''}
+      ${p.perlu_timbang?`<button class="btn ok" onclick="openTimbang('${p.id}')">⚖️ Timbang & Rekap</button>`:''}
+      ${(canSelesai&&!p.perlu_timbang)?`<button class="btn ok" onclick="markSelesai('${p.id}')">✓ Tandai Selesai</button>`:''}
       ${phone?`<a class="btn wa" href="${waLink(phone,notaMsg)}" target="_blank">📄 Nota via WA</a>`:`<button class="btn wa" onclick="toast('Nomor WhatsApp pelanggan belum ada.')">📄 Nota via WA</button>`}
-      ${showWA&&phone?`<a class="btn wa" href="${waLink(phone,waMsg)}" target="_blank">📲 Siap Diambil</a>`:''}
       ${p.status_bayar==='belum'?`<button class="btn" onclick="markPaid('${p.id}')">Tandai Lunas</button>`:''}
       <button class="btn sec" onclick="reprint('${p.id}')">Cetak</button>
       ${canCancel?`<button class="btn bad" onclick="cancelOrder('${p.id}')">Batalkan</button>`:''}
+      <button class="btn bad" onclick="delPesanan('${p.id}')">🗑️ Hapus</button>
     </div>`);
 }
 function waLink(phone,msg){ let p=(phone||'').replace(/[^0-9]/g,''); if(p.startsWith('0'))p='62'+p.slice(1); else if(!p.startsWith('62'))p='62'+p; return `https://wa.me/${p}?text=${encodeURIComponent(msg)}`; }
@@ -666,6 +703,40 @@ async function markSelesai(id){ const { error }=await sb.from('pesanan').update(
 async function markPaid(id){ const { error }=await sb.from('pesanan').update({status_bayar:'lunas'}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } closeModal(); toast('Ditandai lunas.'); if(state.view==='orders')loadOrders(); }
 async function cancelOrder(id){ if(!confirm('Batalkan pesanan ini? Tidak masuk omzet.')) return; const { error }=await sb.from('pesanan').update({status:'batal'}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } await sb.from('status_log').insert({pesanan_id:id,status:'batal',oleh:state.profile.nama}); closeModal(); toast('Dibatalkan.'); if(state.view==='orders')loadOrders(); else if(state.view==='dashboard')renderDashboard(); }
 async function reprint(id){ const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single(); const { data:items }=await sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'); if(!p)return; printStruk(p,(items||[]).map(it=>({nama:it.nama_layanan,qty:it.qty,satuan:it.satuan,subtotal:it.subtotal}))); }
+
+/* ----- timbang & rekap: finalisasi order pesanan online pelanggan ----- */
+function findVarianByNama(nama){ for(const p of PAKET){ if(p.varian){ for(const v of p.varian){ if((p.nama+' · '+v.label)===nama) return {harga:v.harga,min:v.min,jam:v.jam}; } } } return null; }
+async function openTimbang(id){ const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single(); const { data:items }=await sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'); if(!p){ toast('Tidak ditemukan.'); return; } timbangForm(p, items||[]); }
+function timbangForm(p, items){
+  const it=(items&&items[0])||{}; const f=findVarianByNama(it.nama_layanan)||{}; const harga=it.harga||f.harga||0; const min=f.min||0; const jam=f.jam||0;
+  openModal(`<h3>⚖️ Timbang & Rekap</h3>
+    <div class="muted" style="font-size:13px">${esc(p.nomor_invoice)} · ${esc(p.pelanggan_nama||'-')}</div>
+    <div style="margin:10px 0"><b>${esc(it.nama_layanan||'-')}</b><br><span class="muted" style="font-size:12px">${rp(harga)}/kg · min ${min} kg</span></div>
+    <div style="margin:8px 0 4px"><label>Berat timbangan (kg)</label><input id="tb-berat" type="number" min="0" step="0.1" value="${min||1}" oninput="timbangCalc(${harga},${min})" style="font-weight:700;font-size:16px;text-align:center;max-width:140px"></div>
+    <div style="margin:8px 0 4px"><label>Diskon (%)</label><input id="tb-diskon" type="number" min="0" max="100" value="0" oninput="timbangCalc(${harga},${min})" style="max-width:140px"></div>
+    <div id="tb-warn" class="muted" style="font-size:11px;color:var(--warn)"></div>
+    <div class="totline grand" style="margin-top:8px"><span>Total</span><span id="tb-total">${rp(harga*(min||1))}</span></div>
+    <div class="row" style="margin-top:12px"><button class="btn ok" onclick="saveTimbang('${p.id}','${it.id}',${harga},${min},${jam})">Simpan & Proses</button><button class="btn sec" onclick="closeModal()">Batal</button></div>`);
+  timbangCalc(harga,min);
+}
+function timbangCalc(harga,min){
+  const berat=Number($('tb-berat')?.value)||0; const bil=(min&&berat<min)?min:berat; let pct=Number($('tb-diskon')?.value)||0; if(pct<0)pct=0; if(pct>100)pct=100;
+  const sub=Math.round(harga*bil); const total=sub-Math.round(sub*pct/100);
+  const tEl=$('tb-total'); if(tEl) tEl.textContent=rp(total);
+  const w=$('tb-warn'); if(w) w.textContent=(min&&berat<min)?('⚠ di bawah min — ditagih '+min+' kg'):'';
+}
+async function saveTimbang(pesananId, itemId, harga, min, jam){
+  const berat=Number($('tb-berat')?.value)||0; if(berat<=0){ toast('Isi berat timbangan.'); return; }
+  const bil=(min&&berat<min)?min:berat; let pct=Number($('tb-diskon')?.value)||0; if(pct<0)pct=0; if(pct>100)pct=100;
+  const sub=Math.round(harga*bil); const diskon=Math.round(sub*pct/100); const total=sub-diskon;
+  const estTs=new Date(Date.now()+(jam||0)*3600000);
+  try{
+    if(itemId){ const { error:e1 }=await sb.from('pesanan_item').update({qty:bil,subtotal:sub}).eq('id',itemId); if(e1) throw e1; }
+    const { error:e2 }=await sb.from('pesanan').update({subtotal:sub,diskon:diskon,total:total,perlu_timbang:false,estimasi_ts:estTs.toISOString(),estimasi_selesai:estTs.toLocaleDateString('en-CA')}).eq('id',pesananId); if(e2) throw e2;
+    await sb.from('status_log').insert({pesanan_id:pesananId,status:'proses',oleh:state.profile.nama});
+    closeModal(); toast('Tersimpan & diproses.'); if(state.view==='orders')loadOrders(); else if(state.view==='dashboard')renderDashboard();
+  }catch(e){ toast('Gagal: '+(e.message||e)); }
+}
 
 /* ============================================================ CATATAN KASIR (KAS) ============================================================ */
 async function renderKas(){
@@ -701,7 +772,7 @@ async function saveKas(){
 async function delKas(id){ if(!confirm('Hapus catatan ini?')) return; const { error }=await sb.from('kas').delete().eq('id',id); if(error){ toast('Gagal: '+error.message); return; } toast('Dihapus.'); renderKas(); }
 
 /* ============================================================ PENGELUARAN OPERASIONAL ============================================================ */
-const EXP_KATEGORI = ['Gas LPG','Pewangi Laundry','Deterjen Cair','Deterjen Bubuk','Softener','Pemutih Pakaian','Plastik Kemasan','Nota Thermal','Kertas Thermal','Tinta Printer','Lakban Plastik','Listrik','Air','Servis Mesin Cuci','Servis Pengering','Servis Setrika Uap','Gaji Karyawan','Bonus Karyawan','Biaya Tak Terduga'];
+const EXP_KATEGORI = ['Gas LPG','Pewangi Laundry','Deterjen Cair','Deterjen Bubuk','Softener','Pemutih Pakaian','Plastik Kemasan','Nota Thermal','Kertas Thermal','Tinta Printer','Lakban Plastik','Listrik','Air','Servis Mesin Cuci','Servis Pengering','Servis Setrika Uap','Biaya Tak Terduga'];
 const EXP_PLASTIK = ['uk 35','uk 40','uk 45','uk 50','uk 55'];
 const EXP_SATUAN = ['Kg','Liter','Botol/Jerigen','Pcs','Dus','Roll','Pak','Unit','Lembar','Lainnya'];
 const EXP_STATUS = { belum:{label:'Menunggu Pembayaran',color:'#b45309',bg:'#fef3c7'}, lunas:{label:'Sudah Dibayar',color:'#15803d',bg:'#dcfce7'}, batal:{label:'Dibatalkan',color:'#b91c1c',bg:'#fee2e2'} };
@@ -713,13 +784,12 @@ function allExpCats(){ return [...EXP_KATEGORI, ...expCustomCats.filter(c=>!EXP_
 function expPill(s){ const o=EXP_STATUS[s]||{label:s,color:'#64748b',bg:'#e2e8f0'}; return `<span class="pill" style="color:${o.color};background:${o.bg}"><span class="dot"></span>${esc(o.label)}</span>`; }
 
 async function renderExpenses(){
-  if(!isStaff()){ toast('Khusus owner/admin.'); nav('dashboard'); return; }
+  if(!isStaff() && !isKasir()){ nav('dashboard'); return; }
   const _seq=state.navSeq;
-  $('main').innerHTML = topbar('Pengeluaran Operasional', `${isOwner()?`<button class="btn sec" onclick="expManageCats()">⚙️ Kategori</button>`:''}<button class="btn sec" onclick="printExpenses()">🖨️ Cetak</button><button class="btn" onclick="expForm()">+ Pengeluaran</button>`)
+  $('main').innerHTML = topbar('Pengeluaran Operasional', `${isOwner()?`<button class="btn sec" onclick="expManageCats()">⚙️ Kategori</button>`:''}<button class="btn sec" onclick="openLaciView()">💸 Laci</button><button class="btn sec" onclick="printExpenses()">🖨️ Cetak</button><button class="btn" onclick="expForm()">+ Pengeluaran</button>`)
     + `<p class="muted" style="margin:-6px 0 12px">Catat semua biaya operasional. Otomatis masuk ke Dashboard & Laporan. Ketuk kartu untuk pilih tanggal/bulan.</p>
        <div id="exp-sum" class="stats" style="margin-bottom:12px"><div class="skel" style="height:96px"></div><div class="skel" style="height:96px"></div></div>
-       <div class="card" style="margin-bottom:12px"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-calc-body',this)"><h3 style="margin:0">🧮 Kalkulator (catatan di kertas)</h3><span class="collapse-ic">▸</span></div><div id="exp-calc-body" style="display:none"></div></div>
-       <div class="card"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-list-wrap',this)"><h3 style="margin:0">Riwayat Pengeluaran</h3><span class="collapse-ic">▾</span></div>
+       <div class="card" style="margin-bottom:12px"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-list-wrap',this)"><h3 style="margin:0">Riwayat Pengeluaran</h3><span class="collapse-ic">▾</span></div>
          <div id="exp-list-wrap">
            <div class="row" style="margin:10px 0;flex-wrap:wrap;gap:8px">
              <input id="exp-q" placeholder="Cari nama barang…" style="flex:1;min-width:150px" value="${esc(expState.q)}" oninput="expState.q=this.value;loadExpenses()">
@@ -727,7 +797,8 @@ async function renderExpenses(){
              <span id="exp-periode-input"></span>
              <select id="exp-f-status" style="max-width:180px" onchange="expState.status=this.value;loadExpenses()"><option value="">Semua status</option>${Object.entries(EXP_STATUS).map(([k,v])=>`<option value="${k}">${esc(v.label)}</option>`).join('')}</select>
            </div><div id="exp-list">${skelRows(4)}</div>
-         </div></div>`;
+         </div></div>
+       <div class="card"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-calc-body',this)"><h3 style="margin:0">📝 Catat cepat dari kertas</h3><span class="collapse-ic">▾</span></div><div id="exp-calc-body"></div></div>`;
   $('exp-f-periode').value=expState.periode; if(expState.status)$('exp-f-status').value=expState.status; expPeriodeInput(); expCalcRender();
   const { data:cats } = await sb.from('pengeluaran_kategori').select('nama').order('nama');
   if(_seq!==state.navSeq) return;
@@ -736,17 +807,25 @@ async function renderExpenses(){
 }
 function toggleCollapse(id,btn){ const el=$(id); if(!el) return; const show=el.style.display==='none'; el.style.display=show?'':'none'; if(btn){ const ic=btn.querySelector('.collapse-ic'); if(ic) ic.textContent=show?'▾':'▸'; } }
 function expCalcRender(){ const w=$('exp-calc-body'); if(!w) return;
-  w.innerHTML=`<p class="muted" style="font-size:12px;margin-top:8px">Masukkan pengeluaran yang dicatat di <b>kertas</b> (belum ditulis di sini). <b>Tidak disimpan</b> — hanya alat hitung total sebenarnya.</p>
+  w.innerHTML=`<p class="muted" style="font-size:12px;margin-top:8px">Catatan dari <b>kertas/buku</b>: cukup masukkan <b>nominal</b> pengeluarannya lalu <b>Simpan</b> — otomatis masuk ke kartu <b>Pengeluaran hari ini & bulan ini</b> (juga Dashboard & Laporan). Tekan "+ Baris" jika ada beberapa nominal sekaligus.</p>
     <div id="exp-paper-rows">${expPaperRows()}</div>
     <button class="btn sec sm" onclick="expPaper.push(0);$('exp-paper-rows').innerHTML=expPaperRows();expCalcTotals()" style="margin-top:4px">+ Baris</button>
-    <div id="exp-calc-out" style="margin-top:10px"></div>`;
+    <div class="totline grand" style="margin-top:10px"><span>Total akan disimpan</span><span id="exp-calc-out">${rp(0)}</span></div>
+    <button class="btn ok" style="width:100%;margin-top:10px" onclick="saveExpPaper()">💾 Simpan ke Pengeluaran</button>`;
   expCalcTotals();
 }
 function expPaperRows(){ return expPaper.map((v,i)=>`<div class="row" style="margin-bottom:6px;gap:6px"><input type="number" min="0" inputmode="numeric" placeholder="Nominal di kertas (Rp)" value="${v||''}" oninput="expPaper[${i}]=this.value;expCalcTotals()" style="flex:1"><button class="btn sec sm" onclick="expPaper.splice(${i},1);if(!expPaper.length)expPaper=[0];$('exp-paper-rows').innerHTML=expPaperRows();expCalcTotals()">✕</button></div>`).join(''); }
-function expCalcTotals(){ const out=$('exp-calc-out'); if(!out) return; const paper=expPaper.reduce((a,v)=>a+(Math.round(Number(v)||0)),0);
-  out.innerHTML=`<div class="totline"><span class="muted">Total catatan kertas</span><b>${rp(paper)}</b></div>
-    <div class="totline grand"><span>HARI INI: app ${rp(expState.appHari||0)} + kertas</span><span>${rp((expState.appHari||0)+paper)}</span></div>
-    <div class="totline grand"><span>BULAN INI: app ${rp(expState.appBulan||0)} + kertas</span><span>${rp((expState.appBulan||0)+paper)}</span></div>`;
+function expCalcTotals(){ const out=$('exp-calc-out'); if(!out) return; const paper=expPaper.reduce((a,v)=>a+(Math.round(Number(v)||0)),0); out.textContent=rp(paper); }
+async function saveExpPaper(){
+  const vals=expPaper.map(v=>Math.round(Number(v)||0)).filter(v=>v>0);
+  if(!vals.length){ toast('Isi minimal 1 nominal lebih dari 0.'); return; }
+  const payloads=vals.map(v=>({ tanggal:todayISO(), jam:nowHHMM(), kategori:'Lainnya', nama:'Dari catatan kertas', jumlah:1, satuan:'Pcs', harga_satuan:v, total:v, status:'lunas', catatan:'Input cepat dari kertas', dibuat_oleh:state.profile.nama }));
+  try{
+    const { error }=await sb.from('pengeluaran').insert(payloads); if(error) throw error;
+    expPaper=[0]; toast(vals.length+' pengeluaran tersimpan.');
+    if($('exp-paper-rows')) $('exp-paper-rows').innerHTML=expPaperRows();
+    expCalcTotals(); expRenderSummary(); loadExpenses();
+  }catch(e){ toast('Gagal: '+(e.message||e)); }
 }
 function openExpPeriode(initial){
   openModal(`<h3>Lihat Pengeluaran per Periode</h3>
@@ -813,18 +892,54 @@ async function loadExpenses(){
 async function expRenderSummary(){
   const el=$('exp-sum'); if(!el) return;
   const d=new Date(); const mStart=new Date(d.getFullYear(),d.getMonth(),1).toLocaleDateString('en-CA');
-  const [{ data }, { data:kasOut }] = await Promise.all([
+  const [{ data }, { data:kasOut }, { data:unpaid }] = await Promise.all([
     sb.from('pengeluaran').select('tanggal,total,status').gte('tanggal',mStart).neq('status','batal'),
-    sb.from('kas').select('tanggal,nominal,jenis').gte('tanggal',mStart).eq('jenis','keluar')
+    sb.from('kas').select('tanggal,nominal,jenis').gte('tanggal',mStart).eq('jenis','keluar'),
+    sb.from('pesanan').select('total').eq('status_bayar','belum').neq('status','batal')
   ]);
   if(!$('exp-sum')) return;
   const rows=data||[]; const kasRows=kasOut||[]; const today=todayISO();
   const hari=rows.filter(x=>x.tanggal===today).reduce((a,x)=>a+(x.total||0),0) + kasRows.filter(k=>k.tanggal===today).reduce((a,k)=>a+(k.nominal||0),0);
   const bulan=rows.reduce((a,x)=>a+(x.total||0),0) + kasRows.reduce((a,k)=>a+(k.nominal||0),0);
+  const belumTot=(unpaid||[]).reduce((a,x)=>a+(x.total||0),0);
   expState.appHari=hari; expState.appBulan=bulan;
   el.innerHTML=`<div class="card stat" style="cursor:pointer" onclick="openExpPeriode('hari')"><span class="ico" style="background:#fee2e2;color:#b91c1c">🧾</span><div class="lbl">Pengeluaran hari ini ›</div><div class="big" style="color:var(--bad)">${rp(hari)}</div></div>
-    <div class="card stat" style="cursor:pointer" onclick="openExpPeriode('bulan')"><span class="ico" style="background:#fee2e2;color:#b91c1c">📅</span><div class="lbl">Pengeluaran bulan ini ›</div><div class="big" style="color:var(--bad)">${rp(bulan)}</div></div>`;
+    <div class="card stat" style="cursor:pointer" onclick="openExpPeriode('bulan')"><span class="ico" style="background:#fee2e2;color:#b91c1c">📅</span><div class="lbl">Pengeluaran bulan ini ›</div><div class="big" style="color:var(--bad)">${rp(bulan)}</div></div>
+    <div class="card stat" style="cursor:pointer" onclick="openBelumBayar('bulan')"><span class="ico" style="background:#fef3c7;color:#b45309">🧍</span><div class="lbl">Belum dibayar ›</div><div class="big" style="color:var(--warn)">${rp(belumTot)}</div></div>`;
   if($('exp-calc-out')) expCalcTotals();
+}
+function openBelumBayar(initial){
+  openModal(`<h3>🧍 Pelanggan Belum Bayar</h3>
+    <div style="margin:8px 0 4px"><label>Jenis</label><select id="bb-type" onchange="bbRender()"><option value="semua">Semua waktu</option><option value="hari">Per Hari</option><option value="bulan">Per Bulan</option><option value="tahun">Per Tahun</option></select></div>
+    <div id="bb-input"></div><div id="bb-out" style="margin-top:12px"></div>`);
+  $('bb-type').value=initial||'bulan'; bbRender();
+}
+function bbRender(){
+  const t=$('bb-type').value, now=new Date(), wrap=$('bb-input');
+  if(t==='hari'){ wrap.innerHTML=`<label>Pilih tanggal</label><input id="bb-date" type="date" value="${todayISO()}" onchange="bbCalc()">`; }
+  else if(t==='bulan'){ const months=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']; let yrs=''; for(let y=now.getFullYear();y>=now.getFullYear()-5;y--) yrs+=`<option value="${y}">${y}</option>`; wrap.innerHTML=`<div class="row"><div style="flex:1"><label>Bulan</label><select id="bb-month" onchange="bbCalc()">${months.map((mn,i)=>`<option value="${i}" ${i===now.getMonth()?'selected':''}>${mn}</option>`).join('')}</select></div><div style="flex:1"><label>Tahun</label><select id="bb-year" onchange="bbCalc()">${yrs}</select></div></div>`; }
+  else if(t==='tahun'){ let yrs=''; for(let y=now.getFullYear();y>=now.getFullYear()-6;y--) yrs+=`<option value="${y}">${y}</option>`; wrap.innerHTML=`<label>Tahun</label><select id="bb-year" onchange="bbCalc()">${yrs}</select>`; }
+  else wrap.innerHTML='';
+  bbCalc();
+}
+async function bbCalc(){
+  const t=$('bb-type').value, ymd=dt=>dt.toLocaleDateString('en-CA'); let from=null,to=null,label='Semua waktu'; const MO=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  if(t==='hari'){ const dd=$('bb-date').value||todayISO(); from=to=dd; label=tglID(dd); }
+  else if(t==='bulan'){ const mo=+$('bb-month').value, yr=+$('bb-year').value; from=`${yr}-${String(mo+1).padStart(2,'0')}-01`; to=ymd(new Date(yr,mo+1,0)); label=`${MO[mo]} ${yr}`; }
+  else if(t==='tahun'){ const yr=+$('bb-year').value; from=`${yr}-01-01`; to=`${yr}-12-31`; label=''+yr; }
+  const out=$('bb-out'); if(out) out.innerHTML=skelRows(2);
+  let q=sb.from('pesanan').select('pelanggan_id,pelanggan_nama,total,created_at').eq('status_bayar','belum').neq('status','batal').limit(500);
+  if(from){ q=q.gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59'); }
+  const { data, error }=await q; if(!$('bb-out')) return;
+  if(error){ $('bb-out').innerHTML=emptyState('⚠️','Gagal: '+error.message); return; }
+  const rows=data||[]; const total=rows.reduce((a,x)=>a+(x.total||0),0);
+  const grp={}; rows.forEach(r=>{ const k=r.pelanggan_id||('n:'+(r.pelanggan_nama||'-')); if(!grp[k]) grp[k]={nama:r.pelanggan_nama||'-',pid:r.pelanggan_id||null,total:0,n:0}; grp[k].total+=r.total||0; grp[k].n++; });
+  const listArr=Object.values(grp).sort((a,b)=>b.total-a.total);
+  let phoneMap={}; const ids=listArr.map(g=>g.pid).filter(Boolean);
+  if(ids.length){ const { data:cs }=await sb.from('pelanggan').select('id,telepon').in('id',ids); (cs||[]).forEach(c=>{ phoneMap[c.id]=c.telepon; }); }
+  if(!$('bb-out')) return;
+  $('bb-out').innerHTML=`<div class="card" style="background:var(--panel2)"><div class="muted" style="font-size:12px">${esc(label)} · Total belum dibayar</div><b style="font-size:20px;color:var(--warn)">${rp(total)}</b> <span class="muted" style="font-size:12px">· ${listArr.length} pelanggan</span></div>`
+    + (listArr.length? `<table style="margin-top:10px"><thead><tr><th>No</th><th>Nama</th><th>No. WA</th><th>Nominal</th></tr></thead><tbody>${listArr.map((g,i)=>`<tr><td>${i+1}</td><td><b>${esc(g.nama)}</b>${g.n>1?` <span class="muted" style="font-size:11px">(${g.n} nota)</span>`:''}</td><td class="muted">${esc(phoneMap[g.pid]||'-')}</td><td>${rp(g.total)}</td></tr>`).join('')}</tbody></table><div class="muted" style="font-size:11px;margin-top:6px">Untuk detail / tandai lunas, buka menu <b>Pesanan</b>.</div>` : emptyState('✅','Tidak ada yang belum bayar pada periode ini.'));
 }
 function expForm(x){ x=x||{}; const isEdit=!!x.id; const cats=allExpCats();
   const catOpts=cats.map(c=>`<option value="${esc(c)}" ${x.kategori===c?'selected':''}>${esc(c)}</option>`).join('')+`<option value="Lainnya" ${(x.kategori==='Lainnya'||(x.kategori&&!cats.includes(x.kategori)))?'selected':''}>Lainnya</option>`;
@@ -897,7 +1012,25 @@ function printExpenses(){
   setTimeout(()=>window.print(),200);
 }
 
-/* ============================================================ PELANGGAN ============================================================ */
+/* ----- popup khusus: uang keluar dari laci (kas) ----- */
+function openLaciView(){
+  const d=new Date(); const first=new Date(d.getFullYear(),d.getMonth(),1).toLocaleDateString('en-CA');
+  openModal(`<h3>💸 Keluar dari Laci</h3>
+    <p class="muted" style="font-size:13px;margin-top:0">Uang yang diambil dari laci lewat Catatan Kasir (jenis "Keluar"). Ini <b>sudah otomatis</b> ikut dihitung sebagai pengeluaran di Dashboard & Laporan.</p>
+    <div class="row" style="align-items:end"><div style="flex:1"><label>Dari</label><input id="lc-from" type="date" value="${first}"></div><div style="flex:1"><label>Sampai</label><input id="lc-to" type="date" value="${todayISO()}"></div><button class="btn" onclick="laciCalc()">Lihat</button></div>
+    <div id="lc-out" style="margin-top:12px">${skelRows(1)}</div>`);
+  laciCalc();
+}
+async function laciCalc(){
+  const from=$('lc-from').value, to=$('lc-to').value; if(!from||!to){ toast('Isi rentang tanggal.'); return; }
+  const out=$('lc-out'); if(out) out.innerHTML=skelRows(2);
+  const { data, error }=await sb.from('kas').select('*').gte('tanggal',from).lte('tanggal',to).eq('jenis','keluar').order('tanggal',{ascending:false}).order('created_at',{ascending:false});
+  if(!$('lc-out')) return;
+  if(error){ $('lc-out').innerHTML=emptyState('⚠️','Gagal: '+error.message); return; }
+  const rows=data||[]; const total=rows.reduce((a,k)=>a+(k.nominal||0),0);
+  $('lc-out').innerHTML=`<div class="card" style="background:var(--panel2)"><div class="muted" style="font-size:12px">Total keluar dari laci (${tglID(from)} – ${tglID(to)})</div><b style="font-size:22px;color:var(--bad)">${rp(total)}</b></div>`
+    + (rows.length? `<table style="margin-top:10px"><thead><tr><th>Tanggal</th><th>Nominal</th><th>Keterangan</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${tglID(r.tanggal)}</td><td style="color:var(--bad)"><b>${rp(r.nominal)}</b></td><td class="muted">${esc(r.keterangan||'-')}</td></tr>`).join('')}</tbody></table>` : emptyState('💵','Tidak ada uang keluar dari laci pada rentang ini.'));
+}
 async function renderCustomers(){
   $('main').innerHTML = topbar('Pelanggan', `<button class="btn" onclick="custForm()">+ Pelanggan</button>`)
     + `<div class="card"><input id="cust-search" placeholder="Cari nama / HP…" oninput="loadCustomers()" style="margin-bottom:12px"><div id="cust-tbl">${skelRows(4)}</div></div>`;
@@ -948,19 +1081,19 @@ async function loadReport(){
   (exp||[]).forEach(x=>{ const k=x.tanggal; perHari[k]=perHari[k]||{o:0,e:0}; perHari[k].e+=(x.total||0); });
   (kasOut||[]).forEach(k=>{ const dd=k.tanggal; perHari[dd]=perHari[dd]||{o:0,e:0}; perHari[dd].e+=(k.nominal||0); });
   const days=Object.keys(perHari).sort();
-  r.innerHTML=`<div class="stats"><div class="card stat"><div class="lbl">Total omzet</div><div class="big">${rp(omzet)}</div></div><div class="card stat"><div class="lbl">Pengeluaran</div><div class="big" style="color:var(--bad)">${rp(expTotal)}</div></div><div class="card stat"><div class="lbl">Laba bersih</div><div class="big" style="color:${laba>=0?'var(--ok)':'var(--bad)'}">${rp(laba)}</div></div><div class="card stat"><div class="lbl">💸 Keluar dari laci</div><div class="big" style="color:var(--bad)">${rp(laciTotal)}</div></div></div>
-    <div class="muted" style="font-size:12px;margin-top:6px">Jumlah order: ${valid.length} · Dibatalkan: ${(data||[]).length-valid.length} · Belum dibayar: ${rp(belum)} · "Keluar dari laci" sudah termasuk di Pengeluaran.</div>
+  r.innerHTML=`<div class="stats"><div class="card stat"><div class="lbl">Total omzet</div><div class="big">${rp(omzet)}</div></div><div class="card stat"><div class="lbl">Pengeluaran</div><div class="big" style="color:var(--bad)">${rp(expTotal)}</div></div><div class="card stat"><div class="lbl">Laba bersih</div><div class="big" style="color:${laba>=0?'var(--ok)':'var(--bad)'}">${rp(laba)}</div></div><div class="card stat"><div class="lbl">💸 Keluar dari laci</div><div class="big" style="color:var(--bad)">${rp(laciTotal)}</div></div><div class="card stat"><div class="lbl">Belum dibayar</div><div class="big" style="color:var(--warn)">${rp(belum)}</div></div></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Jumlah order: ${valid.length} · Dibatalkan: ${(data||[]).length-valid.length} · "Keluar dari laci" sudah termasuk di Pengeluaran.</div>
     <h3 style="margin-top:16px">Rincian per hari</h3>${days.length?`<table><thead><tr><th>Tanggal</th><th>Omzet</th><th>Keluar</th><th>Laba</th></tr></thead><tbody>${days.map(d=>`<tr><td>${tglID(d)}</td><td>${rp(perHari[d].o)}</td><td style="color:var(--bad)">${rp(perHari[d].e)}</td><td>${rp(perHari[d].o-perHari[d].e)}</td></tr>`).join('')}<tr><td><b>TOTAL</b></td><td><b>${rp(omzet)}</b></td><td><b style="color:var(--bad)">${rp(expTotal)}</b></td><td><b>${rp(laba)}</b></td></tr></tbody></table>`:emptyState('📊','Tidak ada data pada rentang ini.')}`;
 }
 
 /* ============================================================ PENGGUNA ============================================================ */
 async function renderUsers(){
-  $('main').innerHTML = topbar('Pengguna') + `<div class="card"><p class="muted" style="margin-top:0"><b>Owner</b> & <b>Admin</b> akses penuh operasional. <b>Pelanggan</b> hanya lihat laundry miliknya. Akun baru dibuat lewat halaman Daftar.</p><div id="usr-tbl">${skelRows(4)}</div></div>`;
+  $('main').innerHTML = topbar('Pengguna') + `<div class="card"><p class="muted" style="margin-top:0"><b>Owner</b> & <b>Admin</b>: akses penuh. <b>Kasir</b>: hanya Order, Pesanan, Pelanggan, Kas (tidak lihat Dashboard/Laporan/untung). <b>Pelanggan</b>: hanya lihat laundry miliknya. Akun baru dibuat lewat halaman Daftar, lalu set perannya di sini.</p><div id="usr-tbl">${skelRows(4)}</div></div>`;
   const { data, error } = await sb.from('profiles').select('*').order('created_at'); const t=$('usr-tbl'); if(!t) return;
   if(error){ t.innerHTML=emptyState('⚠️','Gagal: '+error.message); return; }
-  const rolePill=r=>({owner:'<span class="pill" style="color:#6d28d9;background:#ede9fe"><span class="dot"></span>Owner</span>',admin:'<span class="pill" style="color:#0369a1;background:#e0f2fe"><span class="dot"></span>Admin</span>',pelanggan:'<span class="pill" style="color:#64748b;background:#e2e8f0"><span class="dot"></span>Pelanggan</span>'}[r]||r);
+  const rolePill=r=>({owner:'<span class="pill" style="color:#6d28d9;background:#ede9fe"><span class="dot"></span>Owner</span>',admin:'<span class="pill" style="color:#0369a1;background:#e0f2fe"><span class="dot"></span>Admin</span>',kasir:'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Kasir</span>',pelanggan:'<span class="pill" style="color:#64748b;background:#e2e8f0"><span class="dot"></span>Pelanggan</span>'}[r]||r);
   t.innerHTML=`<table><thead><tr><th>Nama</th><th>Peran</th><th>Ubah peran</th></tr></thead><tbody>${(data||[]).map(u=>{ const self=u.id===state.me.id;
-    const opts=['owner','admin','pelanggan'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('');
+    const opts=['owner','admin','kasir','pelanggan'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('');
     return `<tr><td><b>${esc(u.nama)}</b>${self?' <span class="muted">(Anda)</span>':''}<br><span class="muted" style="font-size:12px">${esc(u.telepon||'')}</span></td><td>${rolePill(u.role)}</td><td>${self?'<span class="muted">—</span>':`<select onchange="setRole('${u.id}',this.value)" style="max-width:140px">${opts}</select>`}</td></tr>`; }).join('')}</tbody></table>`;
 }
 async function setRole(id,role){ if(!confirm('Ubah peran menjadi '+role+'?')){ renderUsers(); return; } const { error }=await sb.from('profiles').update({role}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } toast('Peran diubah.'); renderUsers(); }
@@ -977,18 +1110,20 @@ async function renderPortal(){
       <div class="row" style="align-items:end"><div style="flex:1"><label>No. WhatsApp</label><input id="pp-phone" placeholder="08xxxx"></div>
       <button class="btn" onclick="savePortalPhone()">Simpan</button></div></div>`;
   } else {
-    ph.innerHTML = `<div class="muted" style="margin:-4px 0 12px;font-size:13px">No. WhatsApp Anda: <b>${esc(state.profile.telepon)}</b> · <a href="#" onclick="editPortalPhone();return false">ubah</a></div>`;
+    ph.innerHTML = `<div class="row" style="margin:-2px 0 12px;justify-content:space-between;align-items:center;gap:8px"><div class="muted" style="font-size:13px">No. WhatsApp Anda: <b>${esc(state.profile.telepon)}</b> · <a href="#" onclick="editPortalPhone();return false">ubah</a></div><button class="btn sm" onclick="portalCheckout()">➕ Pesan Laundry</button></div>`;
   }
   const list=$('portal-list');
-  const { data, error } = await sb.from('pesanan').select('id,nomor_invoice,kode_tracking,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at').order('created_at',{ascending:false}).limit(100);
+  const { data, error } = await sb.from('pesanan').select('id,nomor_invoice,kode_tracking,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at,perlu_timbang,sumber').order('created_at',{ascending:false}).limit(100);
   if(state.view!=='portal'||!$('portal-list')) return;
   if(error){ list.innerHTML=emptyState('⚠️','Gagal memuat: '+error.message); return; }
-  if(!data||!data.length){ list.innerHTML=emptyState('🧺','Belum ada laundry atas nomor Anda. Pastikan nomor WhatsApp di atas sama persis dengan yang dicatat kasir Hanum Laundry.'); return; }
-  list.innerHTML = data.map(p=>`<div class="card" style="margin-bottom:12px;cursor:pointer" onclick="openPortalOrder('${p.id}')">
-    <div style="display:flex;justify-content:space-between;align-items:start"><div><b>${esc(p.nomor_invoice)}</b><br><span class="muted" style="font-size:13px">Lacak: ${esc(p.kode_tracking||'-')} · ${tglID(p.created_at)}</span></div>${statusPill(dispStatus(p))}</div>
-    <div class="row" style="margin-top:10px;gap:20px"><div><div class="muted" style="font-size:12px">Total</div><b>${rp(p.total)}</b></div>
+  if(!data||!data.length){ list.innerHTML=emptyState('🧺','Belum ada laundry atas nomor Anda. Anda bisa pesan lewat tombol "➕ Pesan Laundry" di atas, atau datang langsung ke Hanum Laundry.'); return; }
+  list.innerHTML = data.map(p=>{ const pt=p.perlu_timbang;
+    const sPill = pt?`<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Menunggu ditimbang</span>`:statusPill(dispStatus(p));
+    return `<div class="card" style="margin-bottom:12px;cursor:pointer" onclick="openPortalOrder('${p.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:start"><div><b>${esc(p.nomor_invoice)}</b><br><span class="muted" style="font-size:13px">Lacak: ${esc(p.kode_tracking||'-')} · ${tglID(p.created_at)}</span></div>${sPill}</div>
+    <div class="row" style="margin-top:10px;gap:20px"><div><div class="muted" style="font-size:12px">Total</div>${pt?'<span class="muted" style="font-size:13px">dihitung petugas</span>':`<b>${rp(p.total)}</b>`}</div>
       <div><div class="muted" style="font-size:12px">Bayar</div>${p.status_bayar==='lunas'?'Lunas':'<b style="color:var(--bad)">Belum</b>'}</div>
-      <div><div class="muted" style="font-size:12px">Estimasi</div>${esc(fmtDue(p))}</div></div></div>`).join('');
+      <div><div class="muted" style="font-size:12px">Estimasi</div>${pt?'-':esc(fmtDue(p))}</div></div></div>`; }).join('');
 }
 function editPortalPhone(){ state.profile.telepon=''; renderPortal(); }
 async function savePortalPhone(){
@@ -996,6 +1131,22 @@ async function savePortalPhone(){
   const { error }=await sb.from('profiles').update({telepon:v}).eq('id',state.me.id);
   if(error){ toast('Gagal: '+error.message); return; }
   state.profile.telepon=v; toast('Nomor tersimpan.'); renderPortal();
+}
+function portalCheckout(){
+  let body=`<h3>Pesan Laundry</h3><p class="muted" style="margin-top:0;font-size:13px">Pilih paket. <b>Berat & total dihitung petugas</b> saat baju ditimbang — Anda bayar di tempat.</p>
+    <div style="margin:8px 0 6px"><label>Catatan (opsional)</label><input id="co-catatan" placeholder="cth: pewangi extra, baju putih dipisah"></div>`;
+  PAKET.filter(p=>p.tipe==='kiloan').forEach(p=>{
+    body+=`<div style="font-weight:700;margin:10px 0 4px">${p.ikon} ${esc(p.nama)}</div>`;
+    p.varian.forEach(v=>{ body+=`<button class="btn sec" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:10px" onclick="submitCheckout('${esc(p.nama)} · ${esc(v.label)}',${v.harga})"><span>${esc(v.label)}<br><span class="muted" style="font-size:12px">min ${v.min} kg</span></span><span style="color:var(--brand);font-weight:800">${rp(v.harga)}/kg</span></button>`; });
+  });
+  openModal(body);
+}
+async function submitCheckout(nama, harga){
+  const catatan=($('co-catatan')?.value||'').trim();
+  if(!confirm('Pesan "'+nama+'"?\nBerat & total akan dihitung petugas saat baju ditimbang.')) return;
+  const { data, error } = await sb.rpc('pesan_pelanggan', { p_paket:nama, p_harga:harga, p_catatan:catatan });
+  if(error){ toast('Gagal: '+error.message); return; }
+  closeModal(); toast('Pesanan terkirim! Nota: '+(data||'-')); renderPortal();
 }
 async function openPortalOrder(id){
   const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single();
@@ -1007,11 +1158,12 @@ async function openPortalOrder(id){
   const itemRows=(items||[]).map(it=>`<div class="r2" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(it.nama_layanan)} <span class="muted">${it.qty}${esc(it.satuan)}</span></span><b>${rp(it.subtotal)}</b></div>`).join('');
   const beratKg=(items||[]).filter(it=>(it.satuan||'').toLowerCase()==='kg').reduce((a,it)=>a+Number(it.qty||0),0);
   const timeline=(logs||[]).map(l=>`<div class="muted" style="font-size:12px">${new Date(l.created_at).toLocaleString('id-ID')} — ${esc(STATUS[l.status]?.label||l.status)}</div>`).join('');
-  openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">Kode lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div>${statusPill(ds)}</div>
-    ${stepHTML?`<div class="steps">${stepHTML}</div>`:''}
+  openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">Kode lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div>${p.perlu_timbang?'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Menunggu ditimbang</span>':statusPill(ds)}</div>
+    ${p.perlu_timbang?`<div class="card" style="background:#fef3c7;border-color:#fde68a;margin-top:10px;padding:11px 13px"><b style="color:#b45309">Pesanan diterima 🙌</b><div style="font-size:12px;color:#92400e">Total muncul setelah baju Anda ditimbang petugas. Silakan antar baju ke Hanum Laundry.</div></div>`:''}
+    ${(stepHTML&&!p.perlu_timbang)?`<div class="steps">${stepHTML}</div>`:''}
     <div style="margin:8px 0">${itemRows||'<span class="muted">—</span>'}</div>
     ${beratKg>0?`<div class="r2"><span class="muted">Total berat</span><span>${beratKg} kg</span></div>`:''}
-    <div class="r2"><span class="muted">Total pembayaran</span><b>${rp(p.total)}</b></div>
+    <div class="r2"><span class="muted">Total pembayaran</span>${p.perlu_timbang?'<span class="muted">dihitung petugas</span>':'<b>'+rp(p.total)+'</b>'}</div>
     <div class="r2"><span class="muted">Status bayar</span><span>${p.status_bayar==='lunas'?'Lunas':'<b style="color:var(--bad)">Belum bayar</b>'}</span></div>
     <div class="r2"><span class="muted">Tanggal masuk</span><span>${tglID(p.created_at)}</span></div>
     <div class="r2"><span class="muted">Estimasi selesai</span><span>${esc(fmtDue(p))}</span></div>
