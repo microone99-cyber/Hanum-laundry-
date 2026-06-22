@@ -145,7 +145,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v13</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v14</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -200,7 +200,7 @@
 const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
 const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v13";
+const APP_VERSION = "v14";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -479,16 +479,16 @@ function periodeCalc(){
 
 /* ----- reset semua data transaksi (owner) ----- */
 function hapusPelangganConfirm(id,nama){
-  openModal(`<h3>Hapus Data Pelanggan</h3>
-    <p class="muted">Menghapus <b>semua pesanan</b> milik <b>${esc(nama)}</b> beserta riwayatnya, dan data pelanggannya. Semua total (Dashboard, Pesanan, Laporan) otomatis menyesuaikan. <b>Tidak bisa dibatalkan.</b></p>
-    <div class="row" style="margin-top:12px"><button class="btn bad" onclick="hapusPelangganData(${id?`'${id}'`:'null'},'${esc(nama).replace(/'/g,"\\'")}')">Hapus data</button><button class="btn sec" onclick="closeModal()">Tutup</button></div>`);
+  if(!id){ toast('Pelanggan ini belum tersimpan terpisah (hanya nama dari pesanan).'); return; }
+  openModal(`<h3>Hapus Pelanggan</h3>
+    <p class="muted">Menghapus <b>${esc(nama)}</b> dari <b>daftar pelanggan</b> saja. <b>Pesanan & riwayatnya TIDAK ikut terhapus</b>, dan semua total (Dashboard / Pesanan / Laporan) <b>tetap sama</b>.</p>
+    <div class="row" style="margin-top:12px"><button class="btn bad" onclick="hapusPelangganData('${id}','${esc(nama).replace(/'/g,"\\'")}')">Hapus pelanggan ini</button></div>`);
 }
 async function hapusPelangganData(id,nama){
   try{
-    if(id){ await sb.from('pesanan').delete().eq('pelanggan_id',id); await sb.from('pelanggan').delete().eq('id',id); }
-    else { await sb.from('pesanan').delete().eq('pelanggan_nama',nama).is('pelanggan_id',null); }
+    if(id){ const { error }=await sb.from('pelanggan').delete().eq('id',id); if(error) throw error; }
     state.pelangganCache=state.pelangganCache.filter(c=>c.id!==id);
-    closeModal(); toast('Data '+nama+' dihapus.'); renderDashboard();
+    closeModal(); toast('Pelanggan '+nama+' dihapus dari daftar.'); renderDashboard();
   }catch(e){ toast('Gagal: '+(e.message||e)); }
 }
 async function delPesanan(id){
@@ -784,7 +784,7 @@ async function renderExpenses(){
              <select id="exp-f-status" style="max-width:180px" onchange="expState.status=this.value;loadExpenses()"><option value="">Semua status</option>${Object.entries(EXP_STATUS).map(([k,v])=>`<option value="${k}">${esc(v.label)}</option>`).join('')}</select>
            </div><div id="exp-list">${skelRows(4)}</div>
          </div></div>
-       <div class="card"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-calc-body',this)"><h3 style="margin:0">🧮 Kalkulator (catatan di kertas)</h3><span class="collapse-ic">▾</span></div><div id="exp-calc-body"></div></div>`;
+       <div class="card"><div class="topbar" style="cursor:pointer" onclick="toggleCollapse('exp-calc-body',this)"><h3 style="margin:0">📝 Catat cepat dari kertas</h3><span class="collapse-ic">▾</span></div><div id="exp-calc-body"></div></div>`;
   $('exp-f-periode').value=expState.periode; if(expState.status)$('exp-f-status').value=expState.status; expPeriodeInput(); expCalcRender();
   const { data:cats } = await sb.from('pengeluaran_kategori').select('nama').order('nama');
   if(_seq!==state.navSeq) return;
@@ -793,22 +793,25 @@ async function renderExpenses(){
 }
 function toggleCollapse(id,btn){ const el=$(id); if(!el) return; const show=el.style.display==='none'; el.style.display=show?'':'none'; if(btn){ const ic=btn.querySelector('.collapse-ic'); if(ic) ic.textContent=show?'▾':'▸'; } }
 function expCalcRender(){ const w=$('exp-calc-body'); if(!w) return;
-  w.innerHTML=`<p class="muted" style="font-size:12px;margin-top:8px">Masukkan pengeluaran yang dicatat di <b>kertas</b> (belum ditulis di sini). <b>Tidak disimpan</b> — hanya alat hitung total sebenarnya.</p>
+  w.innerHTML=`<p class="muted" style="font-size:12px;margin-top:8px">Catatan dari <b>kertas/buku</b>: cukup masukkan <b>nominal</b> pengeluarannya lalu <b>Simpan</b> — otomatis masuk ke kartu <b>Pengeluaran hari ini & bulan ini</b> (juga Dashboard & Laporan). Tekan "+ Baris" jika ada beberapa nominal sekaligus.</p>
     <div id="exp-paper-rows">${expPaperRows()}</div>
     <button class="btn sec sm" onclick="expPaper.push(0);$('exp-paper-rows').innerHTML=expPaperRows();expCalcTotals()" style="margin-top:4px">+ Baris</button>
-    <div id="exp-calc-out" style="margin-top:10px"></div>`;
+    <div class="totline grand" style="margin-top:10px"><span>Total akan disimpan</span><span id="exp-calc-out">${rp(0)}</span></div>
+    <button class="btn ok" style="width:100%;margin-top:10px" onclick="saveExpPaper()">💾 Simpan ke Pengeluaran</button>`;
   expCalcTotals();
 }
 function expPaperRows(){ return expPaper.map((v,i)=>`<div class="row" style="margin-bottom:6px;gap:6px"><input type="number" min="0" inputmode="numeric" placeholder="Nominal di kertas (Rp)" value="${v||''}" oninput="expPaper[${i}]=this.value;expCalcTotals()" style="flex:1"><button class="btn sec sm" onclick="expPaper.splice(${i},1);if(!expPaper.length)expPaper=[0];$('exp-paper-rows').innerHTML=expPaperRows();expCalcTotals()">✕</button></div>`).join(''); }
-function expCalcTotals(){ const out=$('exp-calc-out'); if(!out) return; const paper=expPaper.reduce((a,v)=>a+(Math.round(Number(v)||0)),0);
-  const hari=(expState.appHari||0)+paper, bulan=(expState.appBulan||0)+paper;
-  out.innerHTML=`<div class="card" style="background:#dcfce7;border-color:#86efac">
-    <div class="totline"><span style="color:#166534">Catatan kertas</span><b style="color:#166534">${rp(paper)}</b></div>
-    <div style="border-top:1px solid #86efac;margin:7px 0"></div>
-    <div class="totline"><span style="color:#166534;font-weight:700">TOTAL HARI INI</span><b style="color:#166534;font-size:18px">${rp(hari)}</b></div>
-    <div class="muted" style="font-size:11px;color:#15803d;margin-top:-4px">app ${rp(expState.appHari||0)} + kertas ${rp(paper)}</div>
-    <div class="totline" style="margin-top:6px"><span style="color:#166534;font-weight:700">TOTAL BULAN INI</span><b style="color:#166534;font-size:18px">${rp(bulan)}</b></div>
-    <div class="muted" style="font-size:11px;color:#15803d;margin-top:-4px">app ${rp(expState.appBulan||0)} + kertas ${rp(paper)}</div></div>`;
+function expCalcTotals(){ const out=$('exp-calc-out'); if(!out) return; const paper=expPaper.reduce((a,v)=>a+(Math.round(Number(v)||0)),0); out.textContent=rp(paper); }
+async function saveExpPaper(){
+  const vals=expPaper.map(v=>Math.round(Number(v)||0)).filter(v=>v>0);
+  if(!vals.length){ toast('Isi minimal 1 nominal lebih dari 0.'); return; }
+  const payloads=vals.map(v=>({ tanggal:todayISO(), jam:nowHHMM(), kategori:'Lainnya', nama:'Dari catatan kertas', jumlah:1, satuan:'Pcs', harga_satuan:v, total:v, status:'lunas', catatan:'Input cepat dari kertas', dibuat_oleh:state.profile.nama }));
+  try{
+    const { error }=await sb.from('pengeluaran').insert(payloads); if(error) throw error;
+    expPaper=[0]; toast(vals.length+' pengeluaran tersimpan.');
+    if($('exp-paper-rows')) $('exp-paper-rows').innerHTML=expPaperRows();
+    expCalcTotals(); expRenderSummary(); loadExpenses();
+  }catch(e){ toast('Gagal: '+(e.message||e)); }
 }
 function openExpPeriode(initial){
   openModal(`<h3>Lihat Pengeluaran per Periode</h3>
@@ -875,18 +878,54 @@ async function loadExpenses(){
 async function expRenderSummary(){
   const el=$('exp-sum'); if(!el) return;
   const d=new Date(); const mStart=new Date(d.getFullYear(),d.getMonth(),1).toLocaleDateString('en-CA');
-  const [{ data }, { data:kasOut }] = await Promise.all([
+  const [{ data }, { data:kasOut }, { data:unpaid }] = await Promise.all([
     sb.from('pengeluaran').select('tanggal,total,status').gte('tanggal',mStart).neq('status','batal'),
-    sb.from('kas').select('tanggal,nominal,jenis').gte('tanggal',mStart).eq('jenis','keluar')
+    sb.from('kas').select('tanggal,nominal,jenis').gte('tanggal',mStart).eq('jenis','keluar'),
+    sb.from('pesanan').select('total').eq('status_bayar','belum').neq('status','batal')
   ]);
   if(!$('exp-sum')) return;
   const rows=data||[]; const kasRows=kasOut||[]; const today=todayISO();
   const hari=rows.filter(x=>x.tanggal===today).reduce((a,x)=>a+(x.total||0),0) + kasRows.filter(k=>k.tanggal===today).reduce((a,k)=>a+(k.nominal||0),0);
   const bulan=rows.reduce((a,x)=>a+(x.total||0),0) + kasRows.reduce((a,k)=>a+(k.nominal||0),0);
+  const belumTot=(unpaid||[]).reduce((a,x)=>a+(x.total||0),0);
   expState.appHari=hari; expState.appBulan=bulan;
   el.innerHTML=`<div class="card stat" style="cursor:pointer" onclick="openExpPeriode('hari')"><span class="ico" style="background:#fee2e2;color:#b91c1c">🧾</span><div class="lbl">Pengeluaran hari ini ›</div><div class="big" style="color:var(--bad)">${rp(hari)}</div></div>
-    <div class="card stat" style="cursor:pointer" onclick="openExpPeriode('bulan')"><span class="ico" style="background:#fee2e2;color:#b91c1c">📅</span><div class="lbl">Pengeluaran bulan ini ›</div><div class="big" style="color:var(--bad)">${rp(bulan)}</div></div>`;
+    <div class="card stat" style="cursor:pointer" onclick="openExpPeriode('bulan')"><span class="ico" style="background:#fee2e2;color:#b91c1c">📅</span><div class="lbl">Pengeluaran bulan ini ›</div><div class="big" style="color:var(--bad)">${rp(bulan)}</div></div>
+    <div class="card stat" style="cursor:pointer" onclick="openBelumBayar('bulan')"><span class="ico" style="background:#fef3c7;color:#b45309">🧍</span><div class="lbl">Belum dibayar ›</div><div class="big" style="color:var(--warn)">${rp(belumTot)}</div></div>`;
   if($('exp-calc-out')) expCalcTotals();
+}
+function openBelumBayar(initial){
+  openModal(`<h3>🧍 Pelanggan Belum Bayar</h3>
+    <div style="margin:8px 0 4px"><label>Jenis</label><select id="bb-type" onchange="bbRender()"><option value="semua">Semua waktu</option><option value="hari">Per Hari</option><option value="bulan">Per Bulan</option><option value="tahun">Per Tahun</option></select></div>
+    <div id="bb-input"></div><div id="bb-out" style="margin-top:12px"></div>`);
+  $('bb-type').value=initial||'bulan'; bbRender();
+}
+function bbRender(){
+  const t=$('bb-type').value, now=new Date(), wrap=$('bb-input');
+  if(t==='hari'){ wrap.innerHTML=`<label>Pilih tanggal</label><input id="bb-date" type="date" value="${todayISO()}" onchange="bbCalc()">`; }
+  else if(t==='bulan'){ const months=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']; let yrs=''; for(let y=now.getFullYear();y>=now.getFullYear()-5;y--) yrs+=`<option value="${y}">${y}</option>`; wrap.innerHTML=`<div class="row"><div style="flex:1"><label>Bulan</label><select id="bb-month" onchange="bbCalc()">${months.map((mn,i)=>`<option value="${i}" ${i===now.getMonth()?'selected':''}>${mn}</option>`).join('')}</select></div><div style="flex:1"><label>Tahun</label><select id="bb-year" onchange="bbCalc()">${yrs}</select></div></div>`; }
+  else if(t==='tahun'){ let yrs=''; for(let y=now.getFullYear();y>=now.getFullYear()-6;y--) yrs+=`<option value="${y}">${y}</option>`; wrap.innerHTML=`<label>Tahun</label><select id="bb-year" onchange="bbCalc()">${yrs}</select>`; }
+  else wrap.innerHTML='';
+  bbCalc();
+}
+async function bbCalc(){
+  const t=$('bb-type').value, ymd=dt=>dt.toLocaleDateString('en-CA'); let from=null,to=null,label='Semua waktu'; const MO=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  if(t==='hari'){ const dd=$('bb-date').value||todayISO(); from=to=dd; label=tglID(dd); }
+  else if(t==='bulan'){ const mo=+$('bb-month').value, yr=+$('bb-year').value; from=`${yr}-${String(mo+1).padStart(2,'0')}-01`; to=ymd(new Date(yr,mo+1,0)); label=`${MO[mo]} ${yr}`; }
+  else if(t==='tahun'){ const yr=+$('bb-year').value; from=`${yr}-01-01`; to=`${yr}-12-31`; label=''+yr; }
+  const out=$('bb-out'); if(out) out.innerHTML=skelRows(2);
+  let q=sb.from('pesanan').select('pelanggan_id,pelanggan_nama,total,created_at').eq('status_bayar','belum').neq('status','batal').limit(500);
+  if(from){ q=q.gte('created_at',from+'T00:00:00').lte('created_at',to+'T23:59:59'); }
+  const { data, error }=await q; if(!$('bb-out')) return;
+  if(error){ $('bb-out').innerHTML=emptyState('⚠️','Gagal: '+error.message); return; }
+  const rows=data||[]; const total=rows.reduce((a,x)=>a+(x.total||0),0);
+  const grp={}; rows.forEach(r=>{ const k=r.pelanggan_id||('n:'+(r.pelanggan_nama||'-')); if(!grp[k]) grp[k]={nama:r.pelanggan_nama||'-',pid:r.pelanggan_id||null,total:0,n:0}; grp[k].total+=r.total||0; grp[k].n++; });
+  const listArr=Object.values(grp).sort((a,b)=>b.total-a.total);
+  let phoneMap={}; const ids=listArr.map(g=>g.pid).filter(Boolean);
+  if(ids.length){ const { data:cs }=await sb.from('pelanggan').select('id,telepon').in('id',ids); (cs||[]).forEach(c=>{ phoneMap[c.id]=c.telepon; }); }
+  if(!$('bb-out')) return;
+  $('bb-out').innerHTML=`<div class="card" style="background:var(--panel2)"><div class="muted" style="font-size:12px">${esc(label)} · Total belum dibayar</div><b style="font-size:20px;color:var(--warn)">${rp(total)}</b> <span class="muted" style="font-size:12px">· ${listArr.length} pelanggan</span></div>`
+    + (listArr.length? `<table style="margin-top:10px"><thead><tr><th>No</th><th>Nama</th><th>No. WA</th><th>Nominal</th></tr></thead><tbody>${listArr.map((g,i)=>`<tr><td>${i+1}</td><td><b>${esc(g.nama)}</b>${g.n>1?` <span class="muted" style="font-size:11px">(${g.n} nota)</span>`:''}</td><td class="muted">${esc(phoneMap[g.pid]||'-')}</td><td>${rp(g.total)}</td></tr>`).join('')}</tbody></table><div class="muted" style="font-size:11px;margin-top:6px">Untuk detail / tandai lunas, buka menu <b>Pesanan</b>.</div>` : emptyState('✅','Tidak ada yang belum bayar pada periode ini.'));
 }
 function expForm(x){ x=x||{}; const isEdit=!!x.id; const cats=allExpCats();
   const catOpts=cats.map(c=>`<option value="${esc(c)}" ${x.kategori===c?'selected':''}>${esc(c)}</option>`).join('')+`<option value="Lainnya" ${(x.kategori==='Lainnya'||(x.kategori&&!cats.includes(x.kategori)))?'selected':''}>Lainnya</option>`;
