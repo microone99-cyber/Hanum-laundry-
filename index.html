@@ -145,7 +145,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v12</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v13</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -200,7 +200,7 @@
 const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
 const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v12";
+const APP_VERSION = "v13";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -623,14 +623,14 @@ async function renderOrders(){
 async function loadOrders(){
   const myView=state.view;
   const q=($('ord-search')?.value||'').trim(); const f=$('ord-status')?.value||'aktif';
-  let query=sb.from('pesanan').select('id,nomor_invoice,kode_tracking,pelanggan_nama,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at').order('created_at',{ascending:false}).limit(100);
+  let query=sb.from('pesanan').select('id,nomor_invoice,kode_tracking,pelanggan_nama,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at,perlu_timbang').order('created_at',{ascending:false}).limit(100);
   if(f==='aktif') query=query.eq('status','proses'); else if(f!=='semua') query=query.eq('status',f);
   if(q) query=query.or(`nomor_invoice.ilike.%${q}%,pelanggan_nama.ilike.%${q}%,kode_tracking.ilike.%${q}%`);
   const { data, error } = await query; if(state.view!==myView) return; const list=$('ord-list'); if(!list) return;
   if(error){ list.innerHTML=emptyState('⚠️','Gagal memuat: '+error.message); return; }
   if(!data||!data.length){ list.innerHTML=emptyState('📭','Tidak ada pesanan.'); return; }
   list.innerHTML=`<table><thead><tr><th>Invoice</th><th>Pelanggan</th><th>Status</th><th>Total</th><th>Bayar</th></tr></thead><tbody>${
-    data.map(p=>`<tr style="cursor:pointer" onclick="openOrder('${p.id}')"><td><b>${esc(p.nomor_invoice)}</b><br><span class="muted">${tglID(p.created_at)}</span></td><td>${esc(p.pelanggan_nama||'-')}</td><td>${statusPill(dispStatus(p))}</td><td>${rp(p.total)}</td>
+    data.map(p=>`<tr style="cursor:pointer" onclick="openOrder('${p.id}')"><td><b>${esc(p.nomor_invoice)}</b>${p.perlu_timbang?' <span class="pill" style="color:#b45309;background:#fef3c7;font-size:10px">🆕 timbang</span>':''}<br><span class="muted">${tglID(p.created_at)}</span></td><td>${esc(p.pelanggan_nama||'-')}</td><td>${p.perlu_timbang?'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Perlu ditimbang</span>':statusPill(dispStatus(p))}</td><td>${p.perlu_timbang?'<span class="muted">—</span>':rp(p.total)}</td>
       <td>${p.status_bayar==='lunas'?'<span class="pill" style="color:#15803d;background:#dcfce7"><span class="dot"></span>Lunas</span>':'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Belum</span>'}</td></tr>`).join('')
   }</tbody></table>`;
 }
@@ -665,6 +665,7 @@ async function openOrder(id){
   notaMsg+='Buka link di atas, lalu daftar / login pakai nomor WhatsApp ini.\n\n';
   notaMsg+='Terima kasih sudah mempercayakan cucian Anda ke *Hanum Laundry* 🙏';
   openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">${esc(p.pelanggan_nama||'-')} · Lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div><div>${statusPill(ds)}</div></div>
+    ${p.perlu_timbang?`<div class="card" style="background:#fef3c7;border-color:#fde68a;margin-top:10px;padding:11px 13px"><b style="color:#b45309">🆕 Pesanan online dari pelanggan</b><div style="font-size:12px;color:#92400e">Belum ditimbang. Tekan "⚖️ Timbang & Rekap" untuk isi berat & total.</div></div>`:''}
     ${stepHTML?`<div class="steps">${stepHTML}</div>`:''}
     <div style="margin:8px 0">${itemRows||'<span class="muted">—</span>'}</div>
     <div class="r2"><span class="muted">Subtotal</span><span>${rp(p.subtotal)}</span></div><div class="r2"><span class="muted">Diskon</span><span>- ${rp(p.diskon)}</span></div>
@@ -674,7 +675,8 @@ async function openOrder(id){
     ${p.catatan?`<div class="muted" style="font-size:13px;margin-top:4px">Catatan: ${esc(p.catatan)}</div>`:''}
     <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">${logHTML||''}</div>
     <div class="row" style="margin-top:14px">
-      ${canSelesai?`<button class="btn ok" onclick="markSelesai('${p.id}')">✓ Tandai Selesai</button>`:''}
+      ${p.perlu_timbang?`<button class="btn ok" onclick="openTimbang('${p.id}')">⚖️ Timbang & Rekap</button>`:''}
+      ${(canSelesai&&!p.perlu_timbang)?`<button class="btn ok" onclick="markSelesai('${p.id}')">✓ Tandai Selesai</button>`:''}
       ${phone?`<a class="btn wa" href="${waLink(phone,notaMsg)}" target="_blank">📄 Nota via WA</a>`:`<button class="btn wa" onclick="toast('Nomor WhatsApp pelanggan belum ada.')">📄 Nota via WA</button>`}
       ${p.status_bayar==='belum'?`<button class="btn" onclick="markPaid('${p.id}')">Tandai Lunas</button>`:''}
       <button class="btn sec" onclick="reprint('${p.id}')">Cetak</button>
@@ -687,6 +689,40 @@ async function markSelesai(id){ const { error }=await sb.from('pesanan').update(
 async function markPaid(id){ const { error }=await sb.from('pesanan').update({status_bayar:'lunas'}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } closeModal(); toast('Ditandai lunas.'); if(state.view==='orders')loadOrders(); }
 async function cancelOrder(id){ if(!confirm('Batalkan pesanan ini? Tidak masuk omzet.')) return; const { error }=await sb.from('pesanan').update({status:'batal'}).eq('id',id); if(error){ toast('Gagal: '+error.message); return; } await sb.from('status_log').insert({pesanan_id:id,status:'batal',oleh:state.profile.nama}); closeModal(); toast('Dibatalkan.'); if(state.view==='orders')loadOrders(); else if(state.view==='dashboard')renderDashboard(); }
 async function reprint(id){ const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single(); const { data:items }=await sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'); if(!p)return; printStruk(p,(items||[]).map(it=>({nama:it.nama_layanan,qty:it.qty,satuan:it.satuan,subtotal:it.subtotal}))); }
+
+/* ----- timbang & rekap: finalisasi order pesanan online pelanggan ----- */
+function findVarianByNama(nama){ for(const p of PAKET){ if(p.varian){ for(const v of p.varian){ if((p.nama+' · '+v.label)===nama) return {harga:v.harga,min:v.min,jam:v.jam}; } } } return null; }
+async function openTimbang(id){ const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single(); const { data:items }=await sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'); if(!p){ toast('Tidak ditemukan.'); return; } timbangForm(p, items||[]); }
+function timbangForm(p, items){
+  const it=(items&&items[0])||{}; const f=findVarianByNama(it.nama_layanan)||{}; const harga=it.harga||f.harga||0; const min=f.min||0; const jam=f.jam||0;
+  openModal(`<h3>⚖️ Timbang & Rekap</h3>
+    <div class="muted" style="font-size:13px">${esc(p.nomor_invoice)} · ${esc(p.pelanggan_nama||'-')}</div>
+    <div style="margin:10px 0"><b>${esc(it.nama_layanan||'-')}</b><br><span class="muted" style="font-size:12px">${rp(harga)}/kg · min ${min} kg</span></div>
+    <div style="margin:8px 0 4px"><label>Berat timbangan (kg)</label><input id="tb-berat" type="number" min="0" step="0.1" value="${min||1}" oninput="timbangCalc(${harga},${min})" style="font-weight:700;font-size:16px;text-align:center;max-width:140px"></div>
+    <div style="margin:8px 0 4px"><label>Diskon (%)</label><input id="tb-diskon" type="number" min="0" max="100" value="0" oninput="timbangCalc(${harga},${min})" style="max-width:140px"></div>
+    <div id="tb-warn" class="muted" style="font-size:11px;color:var(--warn)"></div>
+    <div class="totline grand" style="margin-top:8px"><span>Total</span><span id="tb-total">${rp(harga*(min||1))}</span></div>
+    <div class="row" style="margin-top:12px"><button class="btn ok" onclick="saveTimbang('${p.id}','${it.id}',${harga},${min},${jam})">Simpan & Proses</button><button class="btn sec" onclick="closeModal()">Batal</button></div>`);
+  timbangCalc(harga,min);
+}
+function timbangCalc(harga,min){
+  const berat=Number($('tb-berat')?.value)||0; const bil=(min&&berat<min)?min:berat; let pct=Number($('tb-diskon')?.value)||0; if(pct<0)pct=0; if(pct>100)pct=100;
+  const sub=Math.round(harga*bil); const total=sub-Math.round(sub*pct/100);
+  const tEl=$('tb-total'); if(tEl) tEl.textContent=rp(total);
+  const w=$('tb-warn'); if(w) w.textContent=(min&&berat<min)?('⚠ di bawah min — ditagih '+min+' kg'):'';
+}
+async function saveTimbang(pesananId, itemId, harga, min, jam){
+  const berat=Number($('tb-berat')?.value)||0; if(berat<=0){ toast('Isi berat timbangan.'); return; }
+  const bil=(min&&berat<min)?min:berat; let pct=Number($('tb-diskon')?.value)||0; if(pct<0)pct=0; if(pct>100)pct=100;
+  const sub=Math.round(harga*bil); const diskon=Math.round(sub*pct/100); const total=sub-diskon;
+  const estTs=new Date(Date.now()+(jam||0)*3600000);
+  try{
+    if(itemId){ const { error:e1 }=await sb.from('pesanan_item').update({qty:bil,subtotal:sub}).eq('id',itemId); if(e1) throw e1; }
+    const { error:e2 }=await sb.from('pesanan').update({subtotal:sub,diskon:diskon,total:total,perlu_timbang:false,estimasi_ts:estTs.toISOString(),estimasi_selesai:estTs.toLocaleDateString('en-CA')}).eq('id',pesananId); if(e2) throw e2;
+    await sb.from('status_log').insert({pesanan_id:pesananId,status:'proses',oleh:state.profile.nama});
+    closeModal(); toast('Tersimpan & diproses.'); if(state.view==='orders')loadOrders(); else if(state.view==='dashboard')renderDashboard();
+  }catch(e){ toast('Gagal: '+(e.message||e)); }
+}
 
 /* ============================================================ CATATAN KASIR (KAS) ============================================================ */
 async function renderKas(){
@@ -1021,18 +1057,20 @@ async function renderPortal(){
       <div class="row" style="align-items:end"><div style="flex:1"><label>No. WhatsApp</label><input id="pp-phone" placeholder="08xxxx"></div>
       <button class="btn" onclick="savePortalPhone()">Simpan</button></div></div>`;
   } else {
-    ph.innerHTML = `<div class="muted" style="margin:-4px 0 12px;font-size:13px">No. WhatsApp Anda: <b>${esc(state.profile.telepon)}</b> · <a href="#" onclick="editPortalPhone();return false">ubah</a></div>`;
+    ph.innerHTML = `<div class="row" style="margin:-2px 0 12px;justify-content:space-between;align-items:center;gap:8px"><div class="muted" style="font-size:13px">No. WhatsApp Anda: <b>${esc(state.profile.telepon)}</b> · <a href="#" onclick="editPortalPhone();return false">ubah</a></div><button class="btn sm" onclick="portalCheckout()">➕ Pesan Laundry</button></div>`;
   }
   const list=$('portal-list');
-  const { data, error } = await sb.from('pesanan').select('id,nomor_invoice,kode_tracking,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at').order('created_at',{ascending:false}).limit(100);
+  const { data, error } = await sb.from('pesanan').select('id,nomor_invoice,kode_tracking,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at,perlu_timbang,sumber').order('created_at',{ascending:false}).limit(100);
   if(state.view!=='portal'||!$('portal-list')) return;
   if(error){ list.innerHTML=emptyState('⚠️','Gagal memuat: '+error.message); return; }
-  if(!data||!data.length){ list.innerHTML=emptyState('🧺','Belum ada laundry atas nomor Anda. Pastikan nomor WhatsApp di atas sama persis dengan yang dicatat kasir Hanum Laundry.'); return; }
-  list.innerHTML = data.map(p=>`<div class="card" style="margin-bottom:12px;cursor:pointer" onclick="openPortalOrder('${p.id}')">
-    <div style="display:flex;justify-content:space-between;align-items:start"><div><b>${esc(p.nomor_invoice)}</b><br><span class="muted" style="font-size:13px">Lacak: ${esc(p.kode_tracking||'-')} · ${tglID(p.created_at)}</span></div>${statusPill(dispStatus(p))}</div>
-    <div class="row" style="margin-top:10px;gap:20px"><div><div class="muted" style="font-size:12px">Total</div><b>${rp(p.total)}</b></div>
+  if(!data||!data.length){ list.innerHTML=emptyState('🧺','Belum ada laundry atas nomor Anda. Anda bisa pesan lewat tombol "➕ Pesan Laundry" di atas, atau datang langsung ke Hanum Laundry.'); return; }
+  list.innerHTML = data.map(p=>{ const pt=p.perlu_timbang;
+    const sPill = pt?`<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Menunggu ditimbang</span>`:statusPill(dispStatus(p));
+    return `<div class="card" style="margin-bottom:12px;cursor:pointer" onclick="openPortalOrder('${p.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:start"><div><b>${esc(p.nomor_invoice)}</b><br><span class="muted" style="font-size:13px">Lacak: ${esc(p.kode_tracking||'-')} · ${tglID(p.created_at)}</span></div>${sPill}</div>
+    <div class="row" style="margin-top:10px;gap:20px"><div><div class="muted" style="font-size:12px">Total</div>${pt?'<span class="muted" style="font-size:13px">dihitung petugas</span>':`<b>${rp(p.total)}</b>`}</div>
       <div><div class="muted" style="font-size:12px">Bayar</div>${p.status_bayar==='lunas'?'Lunas':'<b style="color:var(--bad)">Belum</b>'}</div>
-      <div><div class="muted" style="font-size:12px">Estimasi</div>${esc(fmtDue(p))}</div></div></div>`).join('');
+      <div><div class="muted" style="font-size:12px">Estimasi</div>${pt?'-':esc(fmtDue(p))}</div></div></div>`; }).join('');
 }
 function editPortalPhone(){ state.profile.telepon=''; renderPortal(); }
 async function savePortalPhone(){
@@ -1040,6 +1078,22 @@ async function savePortalPhone(){
   const { error }=await sb.from('profiles').update({telepon:v}).eq('id',state.me.id);
   if(error){ toast('Gagal: '+error.message); return; }
   state.profile.telepon=v; toast('Nomor tersimpan.'); renderPortal();
+}
+function portalCheckout(){
+  let body=`<h3>Pesan Laundry</h3><p class="muted" style="margin-top:0;font-size:13px">Pilih paket. <b>Berat & total dihitung petugas</b> saat baju ditimbang — Anda bayar di tempat.</p>
+    <div style="margin:8px 0 6px"><label>Catatan (opsional)</label><input id="co-catatan" placeholder="cth: pewangi extra, baju putih dipisah"></div>`;
+  PAKET.filter(p=>p.tipe==='kiloan').forEach(p=>{
+    body+=`<div style="font-weight:700;margin:10px 0 4px">${p.ikon} ${esc(p.nama)}</div>`;
+    p.varian.forEach(v=>{ body+=`<button class="btn sec" style="width:100%;text-align:left;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:10px" onclick="submitCheckout('${esc(p.nama)} · ${esc(v.label)}',${v.harga})"><span>${esc(v.label)}<br><span class="muted" style="font-size:12px">min ${v.min} kg</span></span><span style="color:var(--brand);font-weight:800">${rp(v.harga)}/kg</span></button>`; });
+  });
+  openModal(body);
+}
+async function submitCheckout(nama, harga){
+  const catatan=($('co-catatan')?.value||'').trim();
+  if(!confirm('Pesan "'+nama+'"?\nBerat & total akan dihitung petugas saat baju ditimbang.')) return;
+  const { data, error } = await sb.rpc('pesan_pelanggan', { p_paket:nama, p_harga:harga, p_catatan:catatan });
+  if(error){ toast('Gagal: '+error.message); return; }
+  closeModal(); toast('Pesanan terkirim! Nota: '+(data||'-')); renderPortal();
 }
 async function openPortalOrder(id){
   const { data:p }=await sb.from('pesanan').select('*').eq('id',id).single();
@@ -1051,11 +1105,12 @@ async function openPortalOrder(id){
   const itemRows=(items||[]).map(it=>`<div class="r2" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(it.nama_layanan)} <span class="muted">${it.qty}${esc(it.satuan)}</span></span><b>${rp(it.subtotal)}</b></div>`).join('');
   const beratKg=(items||[]).filter(it=>(it.satuan||'').toLowerCase()==='kg').reduce((a,it)=>a+Number(it.qty||0),0);
   const timeline=(logs||[]).map(l=>`<div class="muted" style="font-size:12px">${new Date(l.created_at).toLocaleString('id-ID')} — ${esc(STATUS[l.status]?.label||l.status)}</div>`).join('');
-  openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">Kode lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div>${statusPill(ds)}</div>
-    ${stepHTML?`<div class="steps">${stepHTML}</div>`:''}
+  openModal(`<div style="display:flex;justify-content:space-between;align-items:start"><div><h3>${esc(p.nomor_invoice)}</h3><div class="muted">Kode lacak: <b>${esc(p.kode_tracking||'-')}</b></div></div>${p.perlu_timbang?'<span class="pill" style="color:#b45309;background:#fef3c7"><span class="dot"></span>Menunggu ditimbang</span>':statusPill(ds)}</div>
+    ${p.perlu_timbang?`<div class="card" style="background:#fef3c7;border-color:#fde68a;margin-top:10px;padding:11px 13px"><b style="color:#b45309">Pesanan diterima 🙌</b><div style="font-size:12px;color:#92400e">Total muncul setelah baju Anda ditimbang petugas. Silakan antar baju ke Hanum Laundry.</div></div>`:''}
+    ${(stepHTML&&!p.perlu_timbang)?`<div class="steps">${stepHTML}</div>`:''}
     <div style="margin:8px 0">${itemRows||'<span class="muted">—</span>'}</div>
     ${beratKg>0?`<div class="r2"><span class="muted">Total berat</span><span>${beratKg} kg</span></div>`:''}
-    <div class="r2"><span class="muted">Total pembayaran</span><b>${rp(p.total)}</b></div>
+    <div class="r2"><span class="muted">Total pembayaran</span>${p.perlu_timbang?'<span class="muted">dihitung petugas</span>':'<b>'+rp(p.total)+'</b>'}</div>
     <div class="r2"><span class="muted">Status bayar</span><span>${p.status_bayar==='lunas'?'Lunas':'<b style="color:var(--bad)">Belum bayar</b>'}</span></div>
     <div class="r2"><span class="muted">Tanggal masuk</span><span>${tglID(p.created_at)}</span></div>
     <div class="r2"><span class="muted">Estimasi selesai</span><span>${esc(fmtDue(p))}</span></div>
