@@ -145,7 +145,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v14</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v16</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -200,7 +200,7 @@
 const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
 const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v14";
+const APP_VERSION = "v16";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -326,7 +326,7 @@ async function afterLogin(user){
   else if(isKasir()){ nav('pos'); }
   else { nav('portal'); }
 }
-const KASIR_VIEWS = ['pos','orders','customers','kas'];
+const KASIR_VIEWS = ['pos','orders','expenses','kas'];
 const isOwner = () => state.profile && state.profile.role==='owner';
 const isStaff = () => state.profile && (state.profile.role==='owner' || state.profile.role==='admin');
 const isKasir = () => state.profile && state.profile.role==='kasir';
@@ -334,7 +334,7 @@ const isKasir = () => state.profile && state.profile.role==='kasir';
 function buildMobnav(){
   let items;
   if(isStaff()) items=[['dashboard','📊','Home'],['pos','➕','Order'],['orders','📋','Pesanan'],['expenses','💸','Biaya'],['kas','💵','Kas'],['reports','📈','Laporan']];
-  else if(isKasir()) items=[['pos','➕','Order'],['orders','📋','Pesanan'],['customers','👤','Pelanggan'],['kas','💵','Kas']];
+  else if(isKasir()) items=[['pos','➕','Order'],['orders','📋','Pesanan'],['expenses','💸','Biaya'],['kas','💵','Kas']];
   else items=[['portal','🧾','Laundry Saya']];
   $('mobnav').innerHTML = items.map(([v,i,l])=>`<button class="navbtn" data-view="${v}" onclick="nav('${v}')"><span class="ico">${i}</span>${l}</button>`).join('');
 }
@@ -352,7 +352,12 @@ function nav(view){
   ({dashboard:renderDashboard,pos:renderPOS,orders:renderOrders,kas:renderKas,expenses:renderExpenses,customers:renderCustomers,services:renderServices,reports:renderReports,users:renderUsers,portal:renderPortal}[view]||renderDashboard)();
 }
 
-function topbar(title, extra){ return `<div class="topbar"><h2>${title} <span style="font-size:11px;font-weight:600;color:#fff;background:#16a34a;padding:2px 7px;border-radius:20px;vertical-align:middle">${APP_VERSION}</span></h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button></div></div>`; }
+function topbar(title, extra){
+  const _r = state.profile && state.profile.role;
+  const _rl = _r==='owner'?'Owner':_r==='admin'?'Admin':_r==='kasir'?'Kasir':_r==='pelanggan'?'Pelanggan':'';
+  const _rc = _r==='kasir'?'#b45309':_r==='owner'?'#6d28d9':_r==='admin'?'#0369a1':'#64748b';
+  return `<div class="topbar"><h2>${title} <span style="font-size:11px;font-weight:600;color:#fff;background:#16a34a;padding:2px 7px;border-radius:20px;vertical-align:middle">${APP_VERSION}</span>${_rl?` <span style="font-size:11px;font-weight:700;color:#fff;background:${_rc};padding:2px 8px;border-radius:20px;vertical-align:middle">👤 ${_rl}</span>`:''}</h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button><button class="themebtn" onclick="if(confirm('Keluar dari akun ini?'))doLogout()" title="Keluar / ganti akun" style="color:var(--bad)">🚪</button></div></div>`;
+}
 function emptyState(ico,msg){ return `<div class="empty"><div class="e-ico">${ico}</div>${esc(msg)}</div>`; }
 function skelRows(n){ let s=''; for(let i=0;i<n;i++) s+=`<div class="skel" style="height:46px;margin-bottom:8px"></div>`; return s; }
 
@@ -758,7 +763,7 @@ async function saveKas(){
 async function delKas(id){ if(!confirm('Hapus catatan ini?')) return; const { error }=await sb.from('kas').delete().eq('id',id); if(error){ toast('Gagal: '+error.message); return; } toast('Dihapus.'); renderKas(); }
 
 /* ============================================================ PENGELUARAN OPERASIONAL ============================================================ */
-const EXP_KATEGORI = ['Gas LPG','Pewangi Laundry','Deterjen Cair','Deterjen Bubuk','Softener','Pemutih Pakaian','Plastik Kemasan','Nota Thermal','Kertas Thermal','Tinta Printer','Lakban Plastik','Listrik','Air','Servis Mesin Cuci','Servis Pengering','Servis Setrika Uap','Gaji Karyawan','Bonus Karyawan','Biaya Tak Terduga'];
+const EXP_KATEGORI = ['Gas LPG','Pewangi Laundry','Deterjen Cair','Deterjen Bubuk','Softener','Pemutih Pakaian','Plastik Kemasan','Nota Thermal','Kertas Thermal','Tinta Printer','Lakban Plastik','Listrik','Air','Servis Mesin Cuci','Servis Pengering','Servis Setrika Uap','Biaya Tak Terduga'];
 const EXP_PLASTIK = ['uk 35','uk 40','uk 45','uk 50','uk 55'];
 const EXP_SATUAN = ['Kg','Liter','Botol/Jerigen','Pcs','Dus','Roll','Pak','Unit','Lembar','Lainnya'];
 const EXP_STATUS = { belum:{label:'Menunggu Pembayaran',color:'#b45309',bg:'#fef3c7'}, lunas:{label:'Sudah Dibayar',color:'#15803d',bg:'#dcfce7'}, batal:{label:'Dibatalkan',color:'#b91c1c',bg:'#fee2e2'} };
@@ -770,7 +775,7 @@ function allExpCats(){ return [...EXP_KATEGORI, ...expCustomCats.filter(c=>!EXP_
 function expPill(s){ const o=EXP_STATUS[s]||{label:s,color:'#64748b',bg:'#e2e8f0'}; return `<span class="pill" style="color:${o.color};background:${o.bg}"><span class="dot"></span>${esc(o.label)}</span>`; }
 
 async function renderExpenses(){
-  if(!isStaff()){ toast('Khusus owner/admin.'); nav('dashboard'); return; }
+  if(!isStaff() && !isKasir()){ nav('dashboard'); return; }
   const _seq=state.navSeq;
   $('main').innerHTML = topbar('Pengeluaran Operasional', `${isOwner()?`<button class="btn sec" onclick="expManageCats()">⚙️ Kategori</button>`:''}<button class="btn sec" onclick="openLaciView()">💸 Laci</button><button class="btn sec" onclick="printExpenses()">🖨️ Cetak</button><button class="btn" onclick="expForm()">+ Pengeluaran</button>`)
     + `<p class="muted" style="margin:-6px 0 12px">Catat semua biaya operasional. Otomatis masuk ke Dashboard & Laporan. Ketuk kartu untuk pilih tanggal/bulan.</p>
