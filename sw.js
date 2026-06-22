@@ -1,7 +1,7 @@
 /* Hanum Laundry — service worker v4
    Network-first untuk file aplikasi (selalu versi terbaru saat online),
    fallback ke cache saat offline. Permintaan Supabase/CDN dibiarkan langsung ke jaringan. */
-const CACHE = 'hanum-laundry-v15';
+const CACHE = 'hanum-laundry-v16';
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
