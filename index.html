@@ -101,18 +101,20 @@
   .totline.grand{font-size:21px;font-weight:800;border-top:2px solid var(--ink);margin-top:7px;padding-top:11px}
 
   .ovl{position:fixed;inset:0;background:rgba(2,6,23,.66);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100;animation:ovlIn .18s ease}
-  .modal{background:var(--panel);border-radius:18px;padding:22px;width:100%;max-width:480px;max-height:90vh;overflow:auto;box-shadow:0 30px 70px rgba(0,0,0,.45);transform-origin:center bottom;animation:modalIn .3s cubic-bezier(.2,.9,.25,1.02)}
+  .modal{background:var(--panel);border-radius:18px;padding:22px;width:100%;max-width:480px;max-height:90vh;overflow:auto;box-shadow:0 30px 70px rgba(0,0,0,.45);transform-origin:center bottom}
+  .modal.pop{animation:modalIn .34s cubic-bezier(.2,.92,.28,1.04)}
   @keyframes ovlIn{from{opacity:0}to{opacity:1}}
-  @keyframes modalIn{from{opacity:0;transform:perspective(1100px) rotateX(11deg) translateY(26px) scale(.93)}to{opacity:1;transform:perspective(1100px) rotateX(0) translateY(0) scale(1)}}
+  @keyframes modalIn{from{opacity:0;transform:perspective(1000px) rotateX(14deg) translateY(34px) scale(.9)}to{opacity:1;transform:perspective(1000px) rotateX(0) translateY(0) scale(1)}}
   .r2{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 
-  #splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:linear-gradient(165deg,#173f3a 0%,#245d56 52%,#2f7d6c 100%);transition:opacity .45s ease}
+  #splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#0d5359;transition:opacity .45s ease}
   #splash.off{opacity:0;pointer-events:none}
   .sp-in{text-align:center;color:#fff;padding:24px;animation:spFade .5s ease}
   .sp-logo{width:128px;height:128px;border-radius:30px;box-shadow:0 18px 50px rgba(0,0,0,.45);animation:spPop .6s cubic-bezier(.2,.85,.2,1)}
   .sp-title{font-size:27px;font-weight:800;margin-top:20px;letter-spacing:.3px;text-shadow:0 2px 12px rgba(0,0,0,.4)}
   .sp-tag{font-size:12px;opacity:.92;margin-top:8px;letter-spacing:1.8px;text-transform:uppercase}
-  .sp-spin{width:30px;height:30px;margin:26px auto 0;border:3px solid rgba(255,255,255,.28);border-top-color:#fff;border-radius:50%;animation:spSpin .8s linear infinite}
+  .sp-spin{width:30px;height:30px;margin:0 auto;border:3px solid rgba(255,255,255,.28);border-top-color:#fff;border-radius:50%;animation:spSpin .8s linear infinite}
+  .sp-load{color:rgba(255,255,255,.85);font-size:13px;margin-top:14px;letter-spacing:1px}
   @keyframes spSpin{to{transform:rotate(360deg)}}
   @keyframes spPop{0%{transform:scale(.55);opacity:0}100%{transform:scale(1);opacity:1}}
   @keyframes spFade{from{opacity:0}to{opacity:1}}
@@ -146,10 +148,8 @@
 <!-- ===== SPLASH PEMBUKA ===== -->
 <div id="splash">
   <div class="sp-in">
-    <img src="icon-512.png" class="sp-logo" alt="Hanum Laundry">
-    <div class="sp-title">Hanum Laundry</div>
-    <div class="sp-tag">Bersih · Wangi · Rapi · Terpercaya</div>
     <div class="sp-spin"></div>
+    <div class="sp-load">Memuat…</div>
   </div>
 </div>
 
@@ -169,7 +169,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v19</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v21</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -224,7 +224,7 @@
 const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
 const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v19";
+const APP_VERSION = "v21";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -673,7 +673,7 @@ async function loadOrders(){
   }</tbody></table>`;
 }
 async function openOrder(id){
-  openModal(modalSkel());
+  openModalLoading();
   const [pr,ir,lr] = await Promise.all([
     sb.from('pesanan').select('*').eq('id',id).single(),
     sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'),
@@ -736,7 +736,7 @@ async function reprint(id){ const [pr,ir]=await Promise.all([sb.from('pesanan').
 function findVarianByNama(nama){ for(const p of PAKET){ if(p.varian){ for(const v of p.varian){ if((p.nama+' · '+v.label)===nama) return {harga:v.harga,min:v.min,jam:v.jam}; } } } return null; }
 function findKhususByNama(nama){ const p=PAKET.find(x=>x.key==='harga_khusus'); if(p&&p.item){ const it=p.item.find(i=>i.label===nama); if(it) return {min:it.min,max:it.max,jam:p.jam}; } return null; }
 let coCatatan='';
-async function openTimbang(id){ openModal(modalSkel()); const [pr,ir]=await Promise.all([sb.from('pesanan').select('*').eq('id',id).single(), sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at')]); if(!pr.data){ closeModal(); toast('Tidak ditemukan.'); return; } timbangForm(pr.data, ir.data||[]); }
+async function openTimbang(id){ openModalLoading(); const [pr,ir]=await Promise.all([sb.from('pesanan').select('*').eq('id',id).single(), sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at')]); if(!pr.data){ closeModal(); toast('Tidak ditemukan.'); return; } timbangForm(pr.data, ir.data||[]); }
 function timbangForm(p, items){
   const it=(items&&items[0])||{};
   const _kh=findKhususByNama(it.nama_layanan); if(_kh){ timbangFormSatuan(p, it, _kh); return; }
@@ -1226,7 +1226,7 @@ async function submitCheckout(nama, harga){
   coCatatan=''; closeModal(); toast('Pesanan terkirim! Nota: '+(data||'-')); renderPortal();
 }
 async function openPortalOrder(id){
-  openModal(modalSkel());
+  openModalLoading();
   const [pr,ir,lr]=await Promise.all([
     sb.from('pesanan').select('*').eq('id',id).single(),
     sb.from('pesanan_item').select('*').eq('pesanan_id',id).order('created_at'),
@@ -1252,8 +1252,9 @@ async function openPortalOrder(id){
 }
 
 /* ============================================================ MODAL ============================================================ */
-function openModal(html){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal"><div id="modal-body">${html}</div><button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
-function modalBody(html){ const b=$('modal-body'); if(b) b.innerHTML=html; }
+function openModal(html){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal pop"><div id="modal-body">${html}</div><button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
+function openModalLoading(){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal"><div id="modal-body">${modalSkel()}</div><button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
+function modalBody(html){ const b=$('modal-body'); if(b){ b.innerHTML=html; const m=b.parentElement; if(m){ m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop'); } } }
 function modalSkel(){ return `<div class="skel" style="height:26px;width:55%;margin-bottom:14px"></div><div class="skel" style="height:54px;margin-bottom:10px"></div><div class="skel" style="height:96px;margin-bottom:10px"></div><div class="skel" style="height:40px;width:70%"></div>`; }
 function closeModal(){ $('modal-root').innerHTML=''; }
 function hideSplash(){ const s=$('splash'); if(s&&!s.classList.contains('off')){ s.classList.add('off'); setTimeout(()=>{ if(s.parentNode) s.style.display='none'; },500); } }
