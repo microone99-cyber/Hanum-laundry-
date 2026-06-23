@@ -588,7 +588,11 @@ def _dt(iso):
 
 @api_router.get("/dashboard")
 async def dashboard(user: dict = Depends(require_staff)):
-    orders = await db.pesanan.find().to_list(5000)
+    orders = await db.pesanan.find(
+        {},
+        {"_id": 0, "id": 1, "status": 1, "created_at": 1, "total": 1, "status_bayar": 1, "pelanggan_nama": 1,
+         "nomor_invoice": 1, "perlu_timbang": 1, "kode_tracking": 1},
+    ).to_list(5000)
     valid = [o for o in orders if o.get("status") != "batal"]
     now = datetime.now(timezone.utc)
 
@@ -626,9 +630,19 @@ async def reports(dari: str, sampai: str, user: dict = Depends(require_roles("ow
     start = _dt(dari) or datetime.now(timezone.utc)
     end = _dt(sampai) or datetime.now(timezone.utc)
     end = end.replace(hour=23, minute=59, second=59)
-    orders = await db.pesanan.find().to_list(5000)
-    expenses = await db.pengeluaran.find().to_list(5000)
-    cash = await db.kas.find().to_list(5000)
+    si, ei = start.isoformat(), end.isoformat()
+    orders = await db.pesanan.find(
+        {"created_at": {"$gte": si, "$lte": ei}},
+        {"_id": 0, "status": 1, "created_at": 1, "total": 1, "status_bayar": 1},
+    ).to_list(5000)
+    expenses = await db.pengeluaran.find(
+        {"tanggal": {"$gte": si, "$lte": ei}},
+        {"_id": 0, "tanggal": 1, "total": 1, "status": 1},
+    ).to_list(5000)
+    cash = await db.kas.find(
+        {"tanggal": {"$gte": si, "$lte": ei}},
+        {"_id": 0, "tanggal": 1, "jenis": 1, "nominal": 1},
+    ).to_list(5000)
 
     def in_range(iso):
         d = _dt(iso)
