@@ -94,8 +94,8 @@ async def require_staff(user: dict = Depends(get_current_user)) -> dict:
 # ----------------------- Models -----------------------
 class RegisterIn(BaseModel):
     email: EmailStr
-    password: str
-    nama: str
+    password: str = Field(min_length=6, max_length=128)
+    nama: str = Field(min_length=1, max_length=80)
     telepon: Optional[str] = ""
 
 
@@ -205,6 +205,15 @@ SEED_LAYANAN = [
     {"nama": "Sepatu", "kategori": "Harga Khusus", "satuan": "pcs", "harga": 25000, "estimasi_jam": 72},
     {"nama": "Sandal", "kategori": "Harga Khusus", "satuan": "pcs", "harga": 15000, "estimasi_jam": 72},
 ]
+
+
+@api_router.get("/health")
+async def health():
+    try:
+        await db.command("ping")
+        return {"status": "ok", "db": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB tidak terhubung: {e}")
 
 
 @app.on_event("startup")
@@ -678,6 +687,17 @@ app.add_middleware(
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+# Global error handler — never leak stack traces to clients in production.
+from fastapi.responses import JSONResponse
+from fastapi import Request
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Terjadi kesalahan server. Coba lagi."})
 
 
 @app.on_event("shutdown")
