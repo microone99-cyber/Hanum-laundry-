@@ -169,7 +169,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v21</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v24</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -186,7 +186,6 @@
       <button class="btn" style="width:100%;margin-top:12px" onclick="doRegister()">Buat Akun</button>
       <div id="rg-err" style="margin-top:10px;font-size:13px"></div>
       <div class="muted" style="text-align:center;margin-top:12px;font-size:13px"><a href="#" onclick="showLogin();return false" style="font-weight:600">← Kembali ke login</a></div>
-      <p class="muted" style="font-size:12px;margin-top:12px">Akun ke-1 = <b>Owner</b>, ke-2 & ke-3 = <b>Admin</b>, ke-4 dst = <b>Pelanggan</b>.</p>
     </div>
     <div class="muted" style="text-align:center;margin-top:16px;font-size:12px;border-top:1px solid var(--line);padding-top:12px"><a href="#" onclick="resetConnection();return false" style="color:var(--muted)">Ganti koneksi database</a></div>
   </div>
@@ -224,7 +223,7 @@
 const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
 const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v21";
+const APP_VERSION = "v24";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -232,6 +231,12 @@ const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pe
 const $ = id => document.getElementById(id);
 const rp = n => 'Rp ' + Math.round(Number(n)||0).toLocaleString('id-ID');
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* aman dipakai di dalam string JS pada handler onclick (hex-escape karakter berbahaya) */
+const escJs = s => String(s==null?'':s).replace(/[\\'"`<>&\r\n]/g,c=>'\\x'+c.charCodeAt(0).toString(16).padStart(2,'0'));
+/* buang karakter spesial PostgREST agar pencarian tak bisa mengubah filter */
+const sanitizeSearch = s => String(s==null?'':s).replace(/[%,()\\'"]/g,' ').trim();
+/* normalisasi nomor HP Indonesia -> 62xxxx (konsisten dgn norm_phone di DB) */
+function normPhone(p){ let d=String(p==null?'':p).replace(/\D/g,''); if(!d) return ''; if(d[0]==='0') d='62'+d.slice(1); else if(d.slice(0,2)!=='62') d='62'+d; return d; }
 const todayISO = () => new Date().toLocaleDateString('en-CA');
 const tglID = d => new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
 
@@ -390,7 +395,7 @@ function topbar(title, extra){
   const _r = state.profile && state.profile.role;
   const _rl = _r==='owner'?'Owner':_r==='admin'?'Admin':_r==='kasir'?'Kasir':_r==='pelanggan'?'Pelanggan':'';
   const _rc = _r==='kasir'?'#b45309':_r==='owner'?'#6d28d9':_r==='admin'?'#0369a1':'#64748b';
-  return `<div class="topbar"><h2>${title} <span style="font-size:11px;font-weight:600;color:#fff;background:#16a34a;padding:2px 7px;border-radius:20px;vertical-align:middle">${APP_VERSION}</span>${_rl?` <span style="font-size:11px;font-weight:700;color:#fff;background:${_rc};padding:2px 8px;border-radius:20px;vertical-align:middle">👤 ${_rl}</span>`:''}</h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="openMenu()" title="Menu lengkap">☰</button><button class="themebtn" onclick="toggleTheme()" title="Ganti tema">🌓</button><button class="themebtn" onclick="if(confirm('Keluar dari akun ini?'))doLogout()" title="Keluar / ganti akun" style="color:var(--bad)">🚪</button></div></div>`;
+  return `<div class="topbar"><h2>${title} <span style="font-size:11px;font-weight:600;color:#fff;background:#16a34a;padding:2px 7px;border-radius:20px;vertical-align:middle">${APP_VERSION}</span>${_rl?` <span style="font-size:11px;font-weight:700;color:#fff;background:${_rc};padding:2px 8px;border-radius:20px;vertical-align:middle">👤 ${_rl}</span>`:''}</h2><div class="row" style="gap:8px">${extra||''}<button class="themebtn" onclick="openMenu()" title="Menu lengkap" aria-label="Menu lengkap">☰</button><button class="themebtn" onclick="toggleTheme()" title="Ganti tema" aria-label="Ganti tema terang/gelap">🌓</button><button class="themebtn" onclick="if(confirm('Keluar dari akun ini?'))doLogout()" title="Keluar / ganti akun" aria-label="Keluar dari akun" style="color:var(--bad)">🚪</button></div></div>`;
 }
 function emptyState(ico,msg){ return `<div class="empty"><div class="e-ico">${ico}</div>${esc(msg)}</div>`; }
 function skelRows(n){ let s=''; for(let i=0;i<n;i++) s+=`<div class="skel" style="height:46px;margin-bottom:8px"></div>`; return s; }
@@ -458,7 +463,7 @@ async function renderDashboard(){
       <div class="card" style="margin-top:14px">
         <h3>Pelanggan Teraktif</h3>
         ${top.length? `<div class="muted" style="font-size:12px;margin-bottom:6px">Ketuk nama untuk opsi hapus data pelanggan.</div><table><thead><tr><th>Nama</th><th>Transaksi</th><th>Total</th><th>Terakhir</th></tr></thead><tbody>${
-          top.map(c=>`<tr style="cursor:pointer" onclick="hapusPelangganConfirm(${c.id?`'${c.id}'`:'null'},'${esc(c.nama).replace(/'/g,"\\'")}')"><td><b>${esc(c.nama)}</b></td><td>${c.count}×</td><td>${rp(c.total)}</td><td class="muted">${tglID(c.last)}</td></tr>`).join('')
+          top.map(c=>`<tr style="cursor:pointer" onclick="hapusPelangganConfirm(${c.id?`'${c.id}'`:'null'},'${escJs(c.nama)}')"><td><b>${esc(c.nama)}</b></td><td>${c.count}×</td><td>${rp(c.total)}</td><td class="muted">${tglID(c.last)}</td></tr>`).join('')
         }</tbody></table>` : emptyState('👥','Belum ada transaksi pelanggan.')}
       </div>`;
   $('chart-mode').value=state.chartMode;
@@ -520,7 +525,7 @@ function hapusPelangganConfirm(id,nama){
   if(!id){ toast('Pelanggan ini belum tersimpan terpisah (hanya nama dari pesanan).'); return; }
   openModal(`<h3>Hapus Pelanggan</h3>
     <p class="muted">Menghapus <b>${esc(nama)}</b> dari <b>daftar pelanggan</b> saja. <b>Pesanan & riwayatnya TIDAK ikut terhapus</b>, dan semua total (Dashboard / Pesanan / Laporan) <b>tetap sama</b>.</p>
-    <div class="row" style="margin-top:12px"><button class="btn bad" onclick="hapusPelangganData('${id}','${esc(nama).replace(/'/g,"\\'")}')">Hapus pelanggan ini</button></div>`);
+    <div class="row" style="margin-top:12px"><button class="btn bad" onclick="hapusPelangganData('${id}','${escJs(nama)}')">Hapus pelanggan ini</button></div>`);
 }
 async function hapusPelangganData(id,nama){
   try{
@@ -617,6 +622,8 @@ async function saveOrder(){
   const t=computeTotals(); const nama=$('cust-name').value.trim();
   if(state.cart.length===0){ toast('Tambahkan minimal 1 item.'); return; }
   if(!nama){ toast('Isi nama pelanggan.'); return; }
+  if(t.total<=0){ toast('Total tidak boleh 0. Periksa item & harga.'); return; }
+  if(t.diskonPct>=50 && !confirm('Diskon '+t.diskonPct+'% cukup besar. Lanjut simpan?')) return;
   const statusBayar=$('po-statusbayar').value;
   const bayar = statusBayar==='lunas' ? t.total : 0; const kembalian=0;
   $('po-save').disabled=true; $('po-save').textContent='Menyimpan…';
@@ -663,7 +670,7 @@ async function loadOrders(){
   const q=($('ord-search')?.value||'').trim(); const f=$('ord-status')?.value||'aktif';
   let query=sb.from('pesanan').select('id,nomor_invoice,kode_tracking,pelanggan_nama,status,total,status_bayar,estimasi_ts,estimasi_selesai,created_at,perlu_timbang').order('created_at',{ascending:false}).limit(100);
   if(f==='aktif') query=query.eq('status','proses'); else if(f!=='semua') query=query.eq('status',f);
-  if(q) query=query.or(`nomor_invoice.ilike.%${q}%,pelanggan_nama.ilike.%${q}%,kode_tracking.ilike.%${q}%`);
+  if(q){ const qs=sanitizeSearch(q); if(qs) query=query.or(`nomor_invoice.ilike.%${qs}%,pelanggan_nama.ilike.%${qs}%,kode_tracking.ilike.%${qs}%`); }
   const { data, error } = await query; if(state.view!==myView) return; const list=$('ord-list'); if(!list) return;
   if(error){ list.innerHTML=emptyState('⚠️','Gagal memuat: '+error.message); return; }
   if(!data||!data.length){ list.innerHTML=emptyState('📭','Tidak ada pesanan.'); return; }
@@ -723,7 +730,7 @@ async function openOrder(id){
       ${p.status_bayar==='belum'?`<button class="btn" onclick="markPaid('${p.id}')">Tandai Lunas</button>`:''}
       <button class="btn sec" onclick="reprint('${p.id}')">Cetak</button>
       ${canCancel?`<button class="btn bad" onclick="cancelOrder('${p.id}')">Batalkan</button>`:''}
-      <button class="btn bad" onclick="delPesanan('${p.id}')">🗑️ Hapus</button>
+      ${isOwner()?`<button class="btn bad" onclick="delPesanan('${p.id}')">🗑️ Hapus</button>`:''}
     </div>`);
 }
 function waLink(phone,msg){ let p=(phone||'').replace(/[^0-9]/g,''); if(p.startsWith('0'))p='62'+p.slice(1); else if(!p.startsWith('62'))p='62'+p; return `https://wa.me/${p}?text=${encodeURIComponent(msg)}`; }
@@ -942,7 +949,7 @@ async function loadExpenses(){
   const r=expRange(); if(r){ query=query.gte('tanggal',r.from).lte('tanggal',r.to); }
   if(expState.kategori) query=query.eq('kategori',expState.kategori);
   if(expState.status) query=query.eq('status',expState.status);
-  if(expState.q) query=query.ilike('nama','%'+expState.q+'%');
+  if(expState.q){ const qs=sanitizeSearch(expState.q); if(qs) query=query.ilike('nama','%'+qs+'%'); }
   const { data, error }=await query; if(_seq!==state.navSeq) return;
   expRenderSummary();
   const list=$('exp-list'); if(!list) return;
@@ -1103,13 +1110,13 @@ async function renderCustomers(){
 }
 async function loadCustomers(){
   const q=($('cust-search')?.value||'').trim(); let query=sb.from('pelanggan').select('*').order('nama').limit(300);
-  if(q) query=query.or(`nama.ilike.%${q}%,telepon.ilike.%${q}%`);
+  if(q){ const qs=sanitizeSearch(q); if(qs) query=query.or(`nama.ilike.%${qs}%,telepon.ilike.%${qs}%`); }
   const { data } = await query; state.pelangganCache=data||state.pelangganCache; const t=$('cust-tbl'); if(!t) return;
   if(!data||!data.length){ t.innerHTML=emptyState('👤','Belum ada pelanggan.'); return; }
   t.innerHTML=`<table><thead><tr><th>Nama</th><th>HP</th><th>Alamat</th><th></th></tr></thead><tbody>${data.map(c=>`<tr><td><b>${esc(c.nama)}</b></td><td>${esc(c.telepon||'-')}</td><td class="muted">${esc(c.alamat||'-')}</td><td><button class="btn sec sm" onclick='custForm(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Edit</button></td></tr>`).join('')}</tbody></table>`;
 }
 function custForm(c){ c=c||{}; openModal(`<h3>${c.id?'Edit':'Tambah'} Pelanggan</h3><div style="margin:8px 0 4px"><label>Nama *</label><input id="cf-nama" value="${esc(c.nama||'')}"></div><div style="margin:8px 0 4px"><label>No. HP</label><input id="cf-hp" value="${esc(c.telepon||'')}"></div><div style="margin:8px 0 4px"><label>Alamat</label><textarea id="cf-alamat" rows="2">${esc(c.alamat||'')}</textarea></div><div class="row" style="margin-top:12px"><button class="btn" onclick="saveCust('${c.id||''}')">Simpan</button><button class="btn sec" onclick="closeModal()">Batal</button></div>`); }
-async function saveCust(id){ const nama=$('cf-nama').value.trim(); if(!nama){ toast('Nama wajib.'); return; } const payload={nama,telepon:$('cf-hp').value.trim(),alamat:$('cf-alamat').value.trim()}; const { error }=id?await sb.from('pelanggan').update(payload).eq('id',id):await sb.from('pelanggan').insert(payload); if(error){ toast('Gagal: '+error.message); return; } closeModal(); toast('Tersimpan.'); state.pelangganCache=[]; loadCustomers(); }
+async function saveCust(id){ const nama=$('cf-nama').value.trim(); if(!nama){ toast('Nama wajib.'); return; } const payload={nama,telepon:normPhone($('cf-hp').value.trim()),alamat:$('cf-alamat').value.trim()}; const { error }=id?await sb.from('pelanggan').update(payload).eq('id',id):await sb.from('pelanggan').insert(payload); if(error){ toast('Gagal: '+error.message); return; } closeModal(); toast('Tersimpan.'); state.pelangganCache=[]; loadCustomers(); }
 
 /* ============================================================ LAYANAN ============================================================ */
 async function renderServices(){
@@ -1193,9 +1200,9 @@ async function renderPortal(){
 function editPortalPhone(){ state.profile.telepon=''; renderPortal(); }
 async function savePortalPhone(){
   const v=$('pp-phone').value.trim(); if(!v){ toast('Isi nomor WhatsApp.'); return; }
-  const { error }=await sb.from('profiles').update({telepon:v}).eq('id',state.me.id);
+  const vn=normPhone(v); const { error }=await sb.from('profiles').update({telepon:vn}).eq('id',state.me.id);
   if(error){ toast('Gagal: '+error.message); return; }
-  state.profile.telepon=v; toast('Nomor tersimpan.'); renderPortal();
+  state.profile.telepon=vn; toast('Nomor tersimpan.'); renderPortal();
 }
 function portalCheckout(){
   let body=`<h3>Pesan Laundry</h3><p class="muted" style="margin-top:0;font-size:13px">Pilih jenis layanan. <b>Berat/jumlah & total dihitung petugas</b> saat baju dicek \u2014 bayar di tempat.</p>
@@ -1219,11 +1226,16 @@ function coPickCat(key){
   body+=`<button class="btn sec sm" style="margin-top:8px" onclick="portalCheckout()">\u2190 Kembali</button>`;
   openModal(body);
 }
+let coBusy=false;
 async function submitCheckout(nama, harga){
+  if(coBusy) return;
   if(!confirm('Pesan "'+nama+'"?\nBerat/jumlah & total akan dihitung petugas saat baju dicek.')) return;
-  const { data, error } = await sb.rpc('pesan_pelanggan', { p_paket:nama, p_harga:harga, p_catatan:coCatatan });
-  if(error){ toast('Gagal: '+error.message); return; }
-  coCatatan=''; closeModal(); toast('Pesanan terkirim! Nota: '+(data||'-')); renderPortal();
+  coBusy=true;
+  try{
+    const { data, error } = await sb.rpc('pesan_pelanggan', { p_paket:nama, p_harga:harga, p_catatan:coCatatan });
+    if(error){ toast('Gagal: '+error.message); return; }
+    coCatatan=''; closeModal(); toast('Pesanan terkirim! Nota: '+(data||'-')); renderPortal();
+  } finally { coBusy=false; }
 }
 async function openPortalOrder(id){
   openModalLoading();
@@ -1248,15 +1260,23 @@ async function openPortalOrder(id){
     <div class="r2"><span class="muted">Status bayar</span><span>${p.status_bayar==='lunas'?'Lunas':'<b style="color:var(--bad)">Belum bayar</b>'}</span></div>
     <div class="r2"><span class="muted">Tanggal masuk</span><span>${tglID(p.created_at)}</span></div>
     <div class="r2"><span class="muted">Estimasi selesai</span><span>${esc(fmtDue(p))}</span></div>
-    <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><div class="muted" style="font-size:12px;font-weight:700;margin-bottom:4px">Riwayat status</div>${timeline||'<span class="muted" style="font-size:12px">—</span>'}</div>`);
+    <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><div class="muted" style="font-size:12px;font-weight:700;margin-bottom:4px">Riwayat status</div>${timeline||'<span class="muted" style="font-size:12px">—</span>'}</div>
+    ${(p.perlu_timbang && p.status!=='batal' && p.status!=='selesai')?`<button class="btn bad" style="width:100%;margin-top:14px" onclick="portalCancel('${p.id}')">✕ Batalkan Pesanan</button><div class="muted" style="font-size:11px;margin-top:6px;text-align:center">Bisa dibatalkan selama masih "Menunggu ditimbang".</div>`:''}`);
+}
+async function portalCancel(id){
+  if(!confirm('Batalkan pesanan ini? Tidak bisa diurungkan.')) return;
+  const { error } = await sb.rpc('batal_pesanan_pelanggan', { p_id:id });
+  if(error){ toast('Gagal: '+error.message); return; }
+  closeModal(); toast('Pesanan dibatalkan.'); renderPortal();
 }
 
 /* ============================================================ MODAL ============================================================ */
-function openModal(html){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal pop"><div id="modal-body">${html}</div><button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
-function openModalLoading(){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal"><div id="modal-body">${modalSkel()}</div><button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
+function openModal(html){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal pop" role="dialog" aria-modal="true"><div id="modal-body">${html}</div><button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
+function openModalLoading(){ $('modal-root').innerHTML=`<div class="ovl" onclick="if(event.target===this)closeModal()"><div class="modal" role="dialog" aria-modal="true"><div id="modal-body">${modalSkel()}</div><button class="btn sec sm" style="margin-top:12px" onclick="closeModal()">Tutup</button></div></div>`; }
 function modalBody(html){ const b=$('modal-body'); if(b){ b.innerHTML=html; const m=b.parentElement; if(m){ m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop'); } } }
 function modalSkel(){ return `<div class="skel" style="height:26px;width:55%;margin-bottom:14px"></div><div class="skel" style="height:54px;margin-bottom:10px"></div><div class="skel" style="height:96px;margin-bottom:10px"></div><div class="skel" style="height:40px;width:70%"></div>`; }
 function closeModal(){ $('modal-root').innerHTML=''; }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && $('modal-root') && $('modal-root').innerHTML) closeModal(); });
 function hideSplash(){ const s=$('splash'); if(s&&!s.classList.contains('off')){ s.classList.add('off'); setTimeout(()=>{ if(s.parentNode) s.style.display='none'; },500); } }
 
 /* ============================================================ PWA ============================================================ */
