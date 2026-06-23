@@ -169,7 +169,7 @@
 <!-- ===== LOGIN ===== -->
 <div id="login-view" class="gate hide">
   <div class="gate-card">
-    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v24</b></div></div></div>
+    <div class="logo"><div class="mark"><img src="icon-192.png" alt="Hanum" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></div><div><h1>Hanum Laundry</h1><div class="muted" style="font-size:13px">Sistem Kasir & Manajemen Laundry · <b style="color:#16a34a">v25</b></div></div></div>
     <div id="login-box">
       <div style="margin:16px 0 4px"><label>Email</label><input id="lg-email" type="email" placeholder="email@hanum.com" autocomplete="username" autocapitalize="off"></div>
       <div style="margin:10px 0 4px"><label>Kata sandi</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
@@ -223,7 +223,7 @@
 const SB_URL_DEFAULT = "https://yiuczvlguotgchfbvaan.supabase.co";
 const SB_KEY_DEFAULT = "sb_publishable_QxDfg9CsDdi2xf7NimN1sw_WloEBALC";
 const SITE_URL = "https://hanum-laundry.vercel.app";
-const APP_VERSION = "v24";
+const APP_VERSION = "v25";
 
 let sb = null;
 const state = { me:null, profile:null, view:'dashboard', cart:[], layanan:[], pelangganCache:[], chartMode:'harian', allOrders:[] };
@@ -462,8 +462,8 @@ async function renderDashboard(){
       </div>
       <div class="card" style="margin-top:14px">
         <h3>Pelanggan Teraktif</h3>
-        ${top.length? `<div class="muted" style="font-size:12px;margin-bottom:6px">Ketuk nama untuk opsi hapus data pelanggan.</div><table><thead><tr><th>Nama</th><th>Transaksi</th><th>Total</th><th>Terakhir</th></tr></thead><tbody>${
-          top.map(c=>`<tr style="cursor:pointer" onclick="hapusPelangganConfirm(${c.id?`'${c.id}'`:'null'},'${escJs(c.nama)}')"><td><b>${esc(c.nama)}</b></td><td>${c.count}×</td><td>${rp(c.total)}</td><td class="muted">${tglID(c.last)}</td></tr>`).join('')
+        ${top.length? `<div class="muted" style="font-size:12px;margin-bottom:6px">${isOwner()?'Tekan 🗑️ untuk hapus data pelanggan dari daftar (pesanan & total tetap aman).':'Daftar pelanggan paling aktif.'}</div><table><thead><tr><th>Nama</th><th>Transaksi</th><th>Total</th><th>Terakhir</th>${isOwner()?'<th></th>':''}</tr></thead><tbody>${
+          top.map(c=>`<tr><td><b>${esc(c.nama)}</b></td><td>${c.count}×</td><td>${rp(c.total)}</td><td class="muted">${tglID(c.last)}</td>${isOwner()?`<td style="text-align:right"><button class="btn bad" style="padding:3px 9px;font-size:13px" title="Hapus data pelanggan" onclick="hapusPelangganConfirm(${c.id?`'${c.id}'`:'null'},'${escJs(c.nama)}')">🗑️</button></td>`:''}</tr>`).join('')
         }</tbody></table>` : emptyState('👥','Belum ada transaksi pelanggan.')}
       </div>`;
   $('chart-mode').value=state.chartMode;
@@ -522,7 +522,7 @@ function periodeCalc(){
 
 /* ----- reset semua data transaksi (owner) ----- */
 function hapusPelangganConfirm(id,nama){
-  if(!id){ toast('Pelanggan ini belum tersimpan terpisah (hanya nama dari pesanan).'); return; }
+  if(!id){ toast('Nama ini hanya tercatat di pesanan — tidak ada data pelanggan terpisah untuk dihapus.'); return; }
   openModal(`<h3>Hapus Pelanggan</h3>
     <p class="muted">Menghapus <b>${esc(nama)}</b> dari <b>daftar pelanggan</b> saja. <b>Pesanan & riwayatnya TIDAK ikut terhapus</b>, dan semua total (Dashboard / Pesanan / Laporan) <b>tetap sama</b>.</p>
     <div class="row" style="margin-top:12px"><button class="btn bad" onclick="hapusPelangganData('${id}','${escJs(nama)}')">Hapus pelanggan ini</button></div>`);
