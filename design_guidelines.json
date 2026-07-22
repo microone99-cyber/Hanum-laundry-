@@ -1,0 +1,191 @@
+{
+  "app_name": "HANUM Laundry",
+  "personality": "1 iOS-Native Clean structure optimized for dense POS utility",
+  "personality_one_liner": "A dense-but-clean, professional mobile cashier utility balancing exact status colors with high-legibility layout.",
+  "color": {
+    "surface": "#F1F5F9",
+    "onSurface": "#0F172A",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#0F172A",
+    "surfaceTertiary": "#F8FAFC",
+    "onSurfaceTertiary": "#64748B",
+    "surfaceInverse": "#0B1220",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#6366F1",
+    "brandPrimary": "#6366F1",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#0EA5E9",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#E0E7FF",
+    "onBrandTertiary": "#4F46E5",
+    "success": "#16A34A",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#FFFFFF",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#0EA5E9",
+    "onInfo": "#FFFFFF",
+    "border": "#E2E8F0",
+    "borderStrong": "#CBD5E1",
+    "divider": "#E2E8F0",
+    "status_proses_bg": "#E0F2FE",
+    "status_proses_fg": "#0369A1",
+    "status_siap_bg": "#DCFCE7",
+    "status_siap_fg": "#15803D",
+    "status_selesai_bg": "#E2E8F0",
+    "status_selesai_fg": "#334155",
+    "status_batal_bg": "#FEE2E2",
+    "status_batal_fg": "#B91C1C",
+    "role_owner": "#6D28D9",
+    "role_admin": "#0369A1",
+    "role_kasir": "#B45309",
+    "role_pelanggan": "#64748B",
+    "dark_surface": "#0B1220",
+    "dark_onSurface": "#E5E7EB",
+    "dark_surfaceSecondary": "#111827",
+    "dark_onSurfaceSecondary": "#E5E7EB",
+    "dark_surfaceTertiary": "#1F2937",
+    "dark_onSurfaceTertiary": "#9CA3AF",
+    "dark_border": "#1F2937",
+    "dark_divider": "#1F2937"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "monoFontFamily": "Space Mono",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous spacing outside cards, tight utility spacing inside cards",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 16,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Use glass on floating actions, sticky POS cart bottom bars, and fixed receipt preview headers."
+    ],
+    "dont's": [
+      "Avoid on dense data cards and statistical grids to maintain utility clarity."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Auth",
+      "purpose": "Login & Register with email/password and Hanum logo.",
+      "states": {
+        "loading": "Spinner overlaid on disabled form.",
+        "empty": "N/A",
+        "error": "Inline text below input or snackbar for auth failure."
+      },
+      "layout": "Splash features teal #245D56 background with Hanum Laundry towel logo. Auth form is centered, single column, large 12px radius inputs, bottom sticky submit."
+    },
+    {
+      "name": "Dashboard",
+      "purpose": "Staff overview with stat grids, recent orders, and top customers.",
+      "states": {
+        "loading": "Skeleton grids for stat cards.",
+        "empty": "N/A",
+        "error": "Card showing 'Gagal memuat data' with retry."
+      },
+      "layout": "Top Header: Profile, current date. Main Content: 2-column flexWrap grid for stat cards (Omzet, Orders) on phones, 3-column on tablets. Followed by list of recent order cards. Bottom Navigation present."
+    },
+    {
+      "name": "POS Order Baru",
+      "purpose": "Cart and checkout flow for new transactions.",
+      "states": {
+        "loading": "Spinner during payment processing.",
+        "empty": "Empty clipboard illustration for empty cart.",
+        "error": "Toast for missing required fields."
+      },
+      "layout": "Two-step stack: 1. Package Selection (kiloan/satuan cards in grid). 2. Cart Form (Customer Autocomplete, QTY edits, Discount, Payment Method). Sticky bottom container (glass) with Total and 'Simpan & Cetak' CTA."
+    },
+    {
+      "name": "Daftar Pesanan",
+      "purpose": "Searchable list of all orders with status filters.",
+      "states": {
+        "loading": "Skeleton list rows.",
+        "empty": "Folded towel illustration + 'Belum ada pesanan'.",
+        "error": "Error state with retry."
+      },
+      "layout": "Sticky top search bar & horizontally scrolling filter chips (Proses, Siap, Selesai, Batal). List of order cards below. Each card uses specific status pill colors. Tapping card opens Bottom Sheet for actions (Weigh, Mark Paid, Done, Cancel)."
+    },
+    {
+      "name": "Receipt Preview",
+      "purpose": "Thermal 58/80mm style preview with Bluetooth print action.",
+      "states": {
+        "loading": "Generating receipt skeleton.",
+        "empty": "N/A",
+        "error": "Printer connection failed message."
+      },
+      "layout": "Fixed Header with Edit/Print buttons. Scrollable Preview Area mimics 58mm paper: narrow width, dashed lines between items, left-aligned descriptions, right-aligned Space Mono prices. Bottom sticky print button."
+    }
+  ],
+  "images": {
+    "empty_clipboard": {
+      "url": "https://images.unsplash.com/photo-1651760680066-db9d32bd0357?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwxfHxlbXB0eSUyMGNsaXBib2FyZCUyMGlsbHVzdHJhdGlvbnxlbnwwfHx8fDE3ODIyNTAzOTR8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Empty clipboard illustration for zero states"
+    },
+    "folded_towel": {
+      "url": "https://images.unsplash.com/photo-1666934209606-a955a12edd63?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxmb2xkZWQlMjB3aGl0ZSUyMHRvd2VsJTIwbGF1bmRyeXxlbnwwfHx8fDE3ODIyNTAzOTV8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Folded white towels for laundry aesthetics"
+    },
+    "receipt_printer": {
+      "url": "https://images.pexels.com/photos/9755391/pexels-photo-9755391.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Thermal receipt printer close-up"
+    }
+  },
+  "haptics": {
+    "events": {
+      "primary_button_press": "impactMedium",
+      "tab_change": "selection",
+      "status_change": "notificationSuccess",
+      "item_added_to_cart": "impactLight",
+      "payment_success": "notificationSuccess",
+      "error_alert": "notificationError"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the user's explicit color hex codes (e.g., Brand #6366F1, Warning #F59E0B) and status pill colorings.",
+    "Implement the Dashboard statistic cards in a 2-column flexWrap grid for mobile sizes.",
+    "Use Space Mono for receipt invoice numbers, money format (Rp 20.000, no decimals), and thermal print preview text.",
+    "Ensure the Receipt Preview screen mimics the thermal paper width (narrow, centered, dashed borders, left-aligned item descriptions).",
+    "Adhere to explicit rounded corners: Card radius 16, button radius 12, pill radius 999.",
+    "Order list MUST use card-based layouts, not wide tables, accommodating the status pill, ID, customer name, and total.",
+    "Bottom tabs are required for the staff app navigation (Dashboard, POS, Orders, Customers).",
+    "Add Dark Mode fallback mapping to the specified dark theme background (#0B1220) and panel (#111827) colors."
+  ]
+}
