@@ -2,8 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import certifi
+from dbshim import Database
 import os
 import logging
 import secrets
@@ -18,9 +17,8 @@ from datetime import datetime, timezone, timedelta
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
-db = client[os.environ['DB_NAME']]
+DB_PATH = os.environ.get('DB_PATH', str(ROOT_DIR / 'laundry.db'))
+db = Database(DB_PATH)
 
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
@@ -717,4 +715,4 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    db.close()
