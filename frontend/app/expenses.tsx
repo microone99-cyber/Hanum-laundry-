@@ -16,7 +16,7 @@ const STATUS = ["Sudah Dibayar", "Menunggu Pembayaran", "Dibatalkan"];
 export default function Expenses() {
   const { user } = useAuth();
   const router = useRouter();
-  const canDelete = user && ["owner", "admin"].includes(user.role);
+  const canDelete = user && user.role === "owner";
   const [list, setList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheet, setSheet] = useState(false);

@@ -23,7 +23,8 @@ export default function Index() {
   }
 
   if (!user) return <Redirect href="/login" />;
-  if (isStaff) return <Redirect href="/(staff)/dashboard" />;
+  if (user.role === "owner") return <Redirect href="/(staff)/dashboard" />;
+  if (isStaff) return <Redirect href="/(staff)/pos" />;
   return <Redirect href="/portal" />;
 }
 

@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
-  const isStaff = !!user && ["owner", "admin", "kasir"].includes(user.role);
+  const isStaff = !!user && ["owner", "kasir"].includes(user.role);
 
   return (
     <Ctx.Provider value={{ user, loading, login, register, logout, isStaff }}>

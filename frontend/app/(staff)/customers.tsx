@@ -11,7 +11,7 @@ import { C, SP, R } from "@/src/theme";
 
 export default function Customers() {
   const { user } = useAuth();
-  const canDelete = user && ["owner", "admin"].includes(user.role);
+  const canDelete = user && user.role === "owner";
   const [list, setList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");

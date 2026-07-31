@@ -9,6 +9,7 @@ export default function StaffLayout() {
   if (loading) return null;
   if (!user) return <Redirect href="/login" />;
   if (!isStaff) return <Redirect href="/portal" />;
+  const isOwner = user.role === "owner";
 
   return (
     <Tabs
@@ -28,7 +29,11 @@ export default function StaffLayout() {
     >
       <Tabs.Screen
         name="dashboard"
-        options={{ title: "Beranda", tabBarIcon: ({ color, size }) => <Ionicons name="grid" color={color} size={size} /> }}
+        options={{
+          title: "Beranda",
+          href: isOwner ? undefined : null,
+          tabBarIcon: ({ color, size }) => <Ionicons name="grid" color={color} size={size} />,
+        }}
       />
       <Tabs.Screen
         name="pos"

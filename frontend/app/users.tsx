@@ -8,7 +8,7 @@ import { Header } from "@/src/components/Header";
 import { Sheet } from "@/src/components/Sheet";
 import { C, SP, R, ROLE_LABEL, roleColor } from "@/src/theme";
 
-const ROLES = ["owner", "admin", "kasir", "pelanggan"];
+const ROLES = ["owner", "kasir", "pelanggan"];
 
 export default function Users() {
   const { user } = useAuth();
