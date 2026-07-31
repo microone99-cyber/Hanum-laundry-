@@ -28,7 +28,7 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
 
-STAFF_ROLES = {"owner", "admin", "kasir"}
+STAFF_ROLES = {"owner", "kasir"}
 
 
 # ----------------------- Helpers -----------------------
@@ -235,12 +235,7 @@ async def register(body: RegisterIn):
     if existing:
         raise HTTPException(status_code=400, detail="Email sudah terdaftar")
     count = await db.users.count_documents({})
-    if count == 0:
-        role = "owner"
-    elif count < 3:
-        role = "admin"
-    else:
-        role = "pelanggan"
+    role = "owner" if count == 0 else "pelanggan"
     uid = str(uuid.uuid4())
     user = {
         "id": uid,
@@ -278,14 +273,14 @@ async def list_services(user: dict = Depends(get_current_user)):
 
 
 @api_router.post("/services")
-async def create_service(body: ServiceIn, user: dict = Depends(require_roles("owner", "admin"))):
+async def create_service(body: ServiceIn, user: dict = Depends(require_roles("owner"))):
     doc = {"id": str(uuid.uuid4()), "created_at": now_iso(), **body.dict()}
     await db.layanan.insert_one(doc)
     return clean(doc)
 
 
 @api_router.put("/services/{sid}")
-async def update_service(sid: str, body: ServiceIn, user: dict = Depends(require_roles("owner", "admin"))):
+async def update_service(sid: str, body: ServiceIn, user: dict = Depends(require_roles("owner"))):
     await db.layanan.update_one({"id": sid}, {"$set": body.dict()})
     doc = await db.layanan.find_one({"id": sid})
     if not doc:
@@ -294,7 +289,7 @@ async def update_service(sid: str, body: ServiceIn, user: dict = Depends(require
 
 
 @api_router.delete("/services/{sid}")
-async def delete_service(sid: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def delete_service(sid: str, user: dict = Depends(require_roles("owner"))):
     await db.layanan.delete_one({"id": sid})
     return {"ok": True}
 
@@ -323,7 +318,7 @@ async def update_customer(cid: str, body: CustomerIn, user: dict = Depends(requi
 
 
 @api_router.delete("/customers/{cid}")
-async def delete_customer(cid: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def delete_customer(cid: str, user: dict = Depends(require_roles("owner"))):
     await db.pelanggan.delete_one({"id": cid})
     return {"ok": True}
 
@@ -526,13 +521,13 @@ async def batal_pesanan(oid: str, user: dict = Depends(get_current_user)):
 
 # ----------------------- Pengeluaran (expenses) -----------------------
 @api_router.get("/expenses")
-async def list_expenses(user: dict = Depends(require_staff)):
+async def list_expenses(user: dict = Depends(require_roles("owner"))):
     rows = await db.pengeluaran.find().sort("tanggal", -1).to_list(1000)
     return [clean(r) for r in rows]
 
 
 @api_router.post("/expenses")
-async def create_expense(body: ExpenseIn, user: dict = Depends(require_staff)):
+async def create_expense(body: ExpenseIn, user: dict = Depends(require_roles("owner"))):
     doc = {"id": str(uuid.uuid4()), "created_at": now_iso(), **body.dict()}
     if not doc.get("tanggal"):
         doc["tanggal"] = now_iso()
@@ -541,7 +536,7 @@ async def create_expense(body: ExpenseIn, user: dict = Depends(require_staff)):
 
 
 @api_router.put("/expenses/{eid}")
-async def update_expense(eid: str, body: ExpenseIn, user: dict = Depends(require_staff)):
+async def update_expense(eid: str, body: ExpenseIn, user: dict = Depends(require_roles("owner"))):
     await db.pengeluaran.update_one({"id": eid}, {"$set": body.dict()})
     doc = await db.pengeluaran.find_one({"id": eid})
     if not doc:
@@ -550,20 +545,20 @@ async def update_expense(eid: str, body: ExpenseIn, user: dict = Depends(require
 
 
 @api_router.delete("/expenses/{eid}")
-async def delete_expense(eid: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def delete_expense(eid: str, user: dict = Depends(require_roles("owner"))):
     await db.pengeluaran.delete_one({"id": eid})
     return {"ok": True}
 
 
 # ----------------------- Kas (cash book) -----------------------
 @api_router.get("/cash")
-async def list_cash(user: dict = Depends(require_staff)):
+async def list_cash(user: dict = Depends(require_roles("owner"))):
     rows = await db.kas.find().sort("tanggal", -1).to_list(1000)
     return [clean(r) for r in rows]
 
 
 @api_router.post("/cash")
-async def create_cash(body: CashIn, user: dict = Depends(require_staff)):
+async def create_cash(body: CashIn, user: dict = Depends(require_roles("owner"))):
     doc = {"id": str(uuid.uuid4()), "created_at": now_iso(), **body.dict()}
     if not doc.get("tanggal"):
         doc["tanggal"] = now_iso()
@@ -572,7 +567,7 @@ async def create_cash(body: CashIn, user: dict = Depends(require_staff)):
 
 
 @api_router.delete("/cash/{kid}")
-async def delete_cash(kid: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def delete_cash(kid: str, user: dict = Depends(require_roles("owner"))):
     await db.kas.delete_one({"id": kid})
     return {"ok": True}
 
@@ -586,7 +581,7 @@ def _dt(iso):
 
 
 @api_router.get("/dashboard")
-async def dashboard(user: dict = Depends(require_staff)):
+async def dashboard(user: dict = Depends(require_roles("owner"))):
     orders = await db.pesanan.find(
         {},
         {"_id": 0, "id": 1, "status": 1, "created_at": 1, "total": 1, "status_bayar": 1, "pelanggan_nama": 1,
@@ -625,7 +620,7 @@ async def dashboard(user: dict = Depends(require_staff)):
 
 
 @api_router.get("/reports")
-async def reports(dari: str, sampai: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def reports(dari: str, sampai: str, user: dict = Depends(require_roles("owner"))):
     start = _dt(dari) or datetime.now(timezone.utc)
     end = _dt(sampai) or datetime.now(timezone.utc)
     end = end.replace(hour=23, minute=59, second=59)
@@ -675,14 +670,14 @@ async def reports(dari: str, sampai: str, user: dict = Depends(require_roles("ow
 
 # ----------------------- Users -----------------------
 @api_router.get("/users")
-async def list_users(user: dict = Depends(require_roles("owner", "admin"))):
+async def list_users(user: dict = Depends(require_roles("owner"))):
     rows = await db.users.find().sort("created_at", 1).to_list(500)
     return [{"id": r["id"], "email": r["email"], "nama": r["nama"], "role": r["role"], "telepon": r.get("telepon", "")} for r in rows]
 
 
 @api_router.put("/users/{uid}/role")
 async def set_role(uid: str, body: RoleUpdate, user: dict = Depends(require_roles("owner"))):
-    if body.role not in {"owner", "admin", "kasir", "pelanggan"}:
+    if body.role not in {"owner", "kasir", "pelanggan"}:
         raise HTTPException(400, "Peran tidak valid")
     await db.users.update_one({"id": uid}, {"$set": {"role": body.role}})
     return {"ok": True}
