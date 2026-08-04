@@ -4,7 +4,7 @@ import { Redirect, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
-import { AppText, Card, Button, Field, StatusPill, EmptyState } from "@/src/components/ui";
+import { AppText, Card, Button, Field, StatusPill, EmptyState, Chip } from "@/src/components/ui";
 import { Header } from "@/src/components/Header";
 import { Sheet } from "@/src/components/Sheet";
 import { rupiah, tglID } from "@/src/format";
@@ -20,6 +20,10 @@ export default function Portal() {
   const [kode, setKode] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [butuhJemput, setButuhJemput] = useState(false);
+  const [alamatJemput, setAlamatJemput] = useState("");
+  const [butuhAntar, setButuhAntar] = useState(false);
+  const [alamatAntar, setAlamatAntar] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -47,8 +51,15 @@ export default function Portal() {
   const pesan = async (s: any) => {
     setBusy(true);
     try {
-      await api.post("/orders/customer", { paket: s.nama, harga: s.harga, catatan: "" });
-      setOrderSheet(false); load();
+      await api.post("/orders/customer", {
+        paket: s.nama, harga: s.harga, catatan: "",
+        butuh_jemput: butuhJemput, alamat_jemput: butuhJemput ? alamatJemput : "",
+        butuh_antar: butuhAntar, alamat_antar: butuhAntar ? alamatAntar : "",
+      });
+      setOrderSheet(false);
+      setButuhJemput(false); setAlamatJemput("");
+      setButuhAntar(false); setAlamatAntar("");
+      load();
     } finally { setBusy(false); }
   };
 
@@ -75,6 +86,12 @@ export default function Portal() {
                   <StatusPill status={item.status} />
                 </View>
                 <AppText style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>Lacak: {item.kode_tracking} · {tglID(item.created_at)}</AppText>
+                {(item.butuh_jemput || item.butuh_antar) && (
+                  <View style={{ flexDirection: "row", gap: SP.xs, marginTop: SP.xs, flexWrap: "wrap" }}>
+                    {item.butuh_jemput && <Pill text="🛵 Minta dijemput" fg={C.brand} bg="#EEF2FF" />}
+                    {item.butuh_antar && <Pill text="📦 Minta diantar" fg={C.brand} bg="#EEF2FF" />}
+                  </View>
+                )}
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: SP.sm }}>
                   <AppText>{item.perlu_timbang ? "Menunggu ditimbang" : rupiah(item.total)}</AppText>
                   <AppText weight="semibold" style={{ color: item.status_bayar === "lunas" ? C.success : C.danger }}>{item.status_bayar === "lunas" ? "Lunas" : "Belum bayar"}</AppText>
@@ -96,7 +113,18 @@ export default function Portal() {
 
       <Sheet visible={orderSheet} onClose={() => setOrderSheet(false)} title="Pesan Laundry" testID="pesan-sheet">
         <View style={{ gap: SP.sm }}>
-          <AppText style={{ color: C.muted, marginBottom: SP.xs }}>Pilih paket. Total dihitung petugas saat ditimbang.</AppText>
+          <AppText weight="semibold">Antar jemput?</AppText>
+          <View style={{ flexDirection: "row", gap: SP.sm }}>
+            <Chip label="🛵 Minta Dijemput" active={butuhJemput} onPress={() => setButuhJemput((v) => !v)} testID="toggle-jemput" />
+            <Chip label="📦 Minta Diantar" active={butuhAntar} onPress={() => setButuhAntar((v) => !v)} testID="toggle-antar" />
+          </View>
+          {butuhJemput && (
+            <Field label="Alamat jemput" placeholder="Alamat lengkap untuk dijemput" value={alamatJemput} onChangeText={setAlamatJemput} testID="alamat-jemput-input" />
+          )}
+          {butuhAntar && (
+            <Field label="Alamat antar" placeholder="Alamat lengkap untuk diantar" value={alamatAntar} onChangeText={setAlamatAntar} testID="alamat-antar-input" />
+          )}
+          <AppText style={{ color: C.muted, marginTop: SP.xs, marginBottom: SP.xs }}>Pilih paket. Total dihitung petugas saat ditimbang.</AppText>
           {services.map((s) => (
             <Pressable key={s.id} onPress={() => pesan(s)} disabled={busy} testID={`pesan-${s.id}`}>
               <Card style={styles.svcRow}>

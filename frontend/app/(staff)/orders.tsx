@@ -4,7 +4,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
-import { AppText, Card, Button, Field, Chip, StatusPill, EmptyState } from "@/src/components/ui";
+import { AppText, Card, Button, Field, Chip, StatusPill, EmptyState, Pill } from "@/src/components/ui";
 import { Header } from "@/src/components/Header";
 import { Sheet } from "@/src/components/Sheet";
 import { rupiah, tglJamID } from "@/src/format";
@@ -103,6 +103,12 @@ export default function Orders() {
                   <StatusPill status={item.status} />
                 </View>
                 <AppText style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{tglJamID(item.created_at)}</AppText>
+                {(item.butuh_jemput || item.butuh_antar) && (
+                  <View style={{ flexDirection: "row", gap: SP.xs, marginTop: SP.xs, flexWrap: "wrap" }}>
+                    {item.butuh_jemput && <Pill text="🛵 Jemput" fg={C.brand} bg="#EEF2FF" />}
+                    {item.butuh_antar && <Pill text="📦 Antar" fg={C.brand} bg="#EEF2FF" />}
+                  </View>
+                )}
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: SP.sm }}>
                   <AppText weight="semibold" numberOfLines={1} style={{ flex: 1 }}>{item.pelanggan_nama}</AppText>
                   <View style={{ alignItems: "flex-end" }}>
@@ -126,6 +132,8 @@ export default function Orders() {
               <Row k="Kode lacak" v={sel.kode_tracking} mono />
               <Row k="Tanggal" v={tglJamID(sel.created_at)} />
               <Row k="Kasir" v={sel.kasir_nama} />
+              {sel.butuh_jemput && <Row k="🛵 Jemput di" v={sel.alamat_jemput || "-"} />}
+              {sel.butuh_antar && <Row k="📦 Antar ke" v={sel.alamat_antar || "-"} /> }
               <View style={{ height: 1, backgroundColor: C.border, marginVertical: 4 }} />
               {(sel.items || []).map((it: any, idx: number) => (
                 <View key={idx} style={{ flexDirection: "row", justifyContent: "space-between" }}>

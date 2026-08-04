@@ -86,6 +86,11 @@ export default function Login() {
               {isRegister ? "← Kembali ke login" : "Belum punya akun? Daftar"}
             </AppText>
           </Pressable>
+          {!isRegister && (
+            <Pressable onPress={() => router.push("/forgot-password")} style={{ marginTop: SP.sm, alignItems: "center" }} testID="link-forgot-password">
+              <AppText style={{ color: C.muted }}>Lupa kata sandi?</AppText>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
