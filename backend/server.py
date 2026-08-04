@@ -13,6 +13,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
+import smtplib
+from email.mime.text import MIMEText
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -23,6 +25,30 @@ db = Database(DB_PATH)
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
 TOKEN_EXPIRE_DAYS = int(os.environ.get('ACCESS_TOKEN_EXPIRE_DAYS', '30'))
+
+SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '465'))
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASS = os.environ.get('SMTP_PASS', '')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://hanum-laundry.vercel.app')
+
+
+def send_email(to: str, subject: str, body: str) -> bool:
+    if not SMTP_USER or not SMTP_PASS:
+        logging.warning("SMTP belum dikonfigurasi, email tidak terkirim (SMTP_USER/SMTP_PASS kosong)")
+        return False
+    try:
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = SMTP_USER
+        msg["To"] = to
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_USER, [to], msg.as_string())
+        return True
+    except Exception as e:
+        logging.error(f"Gagal kirim email ke {to}: {e}")
+        return False
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -152,6 +178,19 @@ class CustomerOrderIn(BaseModel):
     paket: str
     harga: int = 0
     catatan: Optional[str] = ""
+    butuh_jemput: bool = False
+    alamat_jemput: Optional[str] = ""
+    butuh_antar: bool = False
+    alamat_antar: Optional[str] = ""
+
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    password: str
 
 
 class ClaimIn(BaseModel):
@@ -247,6 +286,16 @@ async def register(body: RegisterIn):
         "created_at": now_iso(),
     }
     await db.users.insert_one(user)
+    if role == "pelanggan":
+        # otomatis muncul di daftar Pelanggan yang staff lihat, tanpa perlu dibikinin kasir
+        await db.pelanggan.insert_one({
+            "id": str(uuid.uuid4()),
+            "nama": body.nama,
+            "telepon": body.telepon or "",
+            "alamat": "",
+            "user_id": uid,
+            "created_at": now_iso(),
+        })
     token = make_token(uid)
     return {"token": token, "user": {"id": uid, "email": user["email"], "nama": user["nama"], "role": role, "telepon": user["telepon"]}}
 
@@ -263,6 +312,50 @@ async def login(body: LoginIn):
 @api_router.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return {"id": user["id"], "email": user["email"], "nama": user["nama"], "role": user["role"], "telepon": user.get("telepon", "")}
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordIn):
+    user = await db.users.find_one({"email": body.email.lower()})
+    if user:
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        await db.password_resets.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": user["email"],
+            "token": token,
+            "expires_at": expires_at,
+            "used": False,
+            "created_at": now_iso(),
+        })
+        link = f"{FRONTEND_URL}/reset-password?token={token}"
+        send_email(
+            user["email"],
+            "Reset Kata Sandi - Hanum Laundry",
+            f"Halo {user['nama']},\n\n"
+            f"Kami menerima permintaan reset kata sandi untuk akun kamu.\n"
+            f"Klik link berikut untuk membuat kata sandi baru (berlaku 1 jam):\n{link}\n\n"
+            f"Kalau kamu tidak meminta ini, abaikan saja email ini.",
+        )
+    # Selalu balas sukses, biar tidak bocorin email mana yang terdaftar
+    return {"ok": True}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordIn):
+    if len(body.password) < 6:
+        raise HTTPException(400, "Kata sandi minimal 6 karakter")
+    reset = await db.password_resets.find_one({"token": body.token})
+    if not reset or reset.get("used"):
+        raise HTTPException(400, "Link reset tidak valid atau sudah dipakai")
+    if reset["expires_at"] < now_iso():
+        raise HTTPException(400, "Link reset sudah kedaluwarsa, silakan minta ulang")
+    user = await db.users.find_one({"email": reset["email"]})
+    if not user:
+        raise HTTPException(400, "Akun tidak ditemukan")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"password": hash_pw(body.password)}})
+    await db.password_resets.update_one({"id": reset["id"]}, {"$set": {"used": True}})
+    return {"ok": True}
 
 
 # ----------------------- Layanan -----------------------
@@ -487,6 +580,10 @@ async def pesan_pelanggan(body: CustomerOrderIn, user: dict = Depends(get_curren
         "metode_bayar": "-",
         "status_bayar": "belum",
         "catatan": body.catatan or "",
+        "butuh_jemput": body.butuh_jemput,
+        "alamat_jemput": body.alamat_jemput or "",
+        "butuh_antar": body.butuh_antar,
+        "alamat_antar": body.alamat_antar or "",
         "perlu_timbang": True,
         "estimasi_selesai": None,
         "owner_user_id": user["id"],
