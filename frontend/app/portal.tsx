@@ -24,12 +24,14 @@ export default function Portal() {
   const [alamatJemput, setAlamatJemput] = useState("");
   const [butuhAntar, setButuhAntar] = useState(false);
   const [alamatAntar, setAlamatAntar] = useState("");
+  const [antarJemputEnabled, setAntarJemputEnabled] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const [mine, svc] = await Promise.all([api.get("/orders/mine"), api.get("/services")]);
+      const [mine, svc, settings] = await Promise.all([api.get("/orders/mine"), api.get("/services"), api.get("/settings/public")]);
       setList(mine);
       setServices(svc.filter((s: any) => s.aktif));
+      setAntarJemputEnabled(!!settings.antar_jemput_enabled);
     } finally { setLoading(false); }
   }, []);
   useFocusEffect(useCallback(() => { if (user && !isStaff) load(); }, [load, user, isStaff]));
@@ -113,16 +115,20 @@ export default function Portal() {
 
       <Sheet visible={orderSheet} onClose={() => setOrderSheet(false)} title="Pesan Laundry" testID="pesan-sheet">
         <View style={{ gap: SP.sm }}>
-          <AppText weight="semibold">Antar jemput?</AppText>
-          <View style={{ flexDirection: "row", gap: SP.sm }}>
-            <Chip label="🛵 Minta Dijemput" active={butuhJemput} onPress={() => setButuhJemput((v) => !v)} testID="toggle-jemput" />
-            <Chip label="📦 Minta Diantar" active={butuhAntar} onPress={() => setButuhAntar((v) => !v)} testID="toggle-antar" />
-          </View>
-          {butuhJemput && (
-            <Field label="Alamat jemput" placeholder="Alamat lengkap untuk dijemput" value={alamatJemput} onChangeText={setAlamatJemput} testID="alamat-jemput-input" />
-          )}
-          {butuhAntar && (
-            <Field label="Alamat antar" placeholder="Alamat lengkap untuk diantar" value={alamatAntar} onChangeText={setAlamatAntar} testID="alamat-antar-input" />
+          {antarJemputEnabled && (
+            <>
+              <AppText weight="semibold">Antar jemput?</AppText>
+              <View style={{ flexDirection: "row", gap: SP.sm }}>
+                <Chip label="🛵 Minta Dijemput" active={butuhJemput} onPress={() => setButuhJemput((v) => !v)} testID="toggle-jemput" />
+                <Chip label="📦 Minta Diantar" active={butuhAntar} onPress={() => setButuhAntar((v) => !v)} testID="toggle-antar" />
+              </View>
+              {butuhJemput && (
+                <Field label="Alamat jemput" placeholder="Alamat lengkap untuk dijemput" value={alamatJemput} onChangeText={setAlamatJemput} testID="alamat-jemput-input" />
+              )}
+              {butuhAntar && (
+                <Field label="Alamat antar" placeholder="Alamat lengkap untuk diantar" value={alamatAntar} onChangeText={setAlamatAntar} testID="alamat-antar-input" />
+              )}
+            </>
           )}
           <AppText style={{ color: C.muted, marginTop: SP.xs, marginBottom: SP.xs }}>Pilih paket. Total dihitung petugas saat ditimbang.</AppText>
           {services.map((s) => (

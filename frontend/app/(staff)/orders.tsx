@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView } from "react-native";
+import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, Linking } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
@@ -70,6 +70,16 @@ export default function Orders() {
     );
   const cancel = () => act(() => api.post(`/orders/${sel.id}/cancel`));
   const hapus = async () => { await api.del(`/orders/${sel.id}`); setSel(null); load(); };
+
+  const chatWA = (order: any) => {
+    let nomor = String(order.pelanggan_telepon || "").replace(/[^0-9]/g, "");
+    if (nomor.startsWith("0")) nomor = "62" + nomor.slice(1);
+    let pesan = `Halo ${order.pelanggan_nama}, ini dari Hanum Laundry terkait pesanan ${order.nomor_invoice}.`;
+    if (order.butuh_jemput) pesan += `\nKami akan jemput cucian di: ${order.alamat_jemput || "(alamat belum diisi)"}.`;
+    if (order.butuh_antar) pesan += `\nKami akan antar cucian ke: ${order.alamat_antar || "(alamat belum diisi)"}.`;
+    pesan += `\nMohon konfirmasi waktu yang pas ya. Terima kasih.`;
+    Linking.openURL(`https://wa.me/${nomor}?text=${encodeURIComponent(pesan)}`);
+  };
 
   const filtered = list.filter((o) => {
     const okF = !filter || o.status === filter;
@@ -172,6 +182,16 @@ export default function Orders() {
             )}
 
             <Button title="Cetak Nota" icon="print" onPress={() => { const id = sel.id; setSel(null); router.push(`/receipt/${id}`); }} testID="detail-print" />
+
+            {(sel.butuh_jemput || sel.butuh_antar) && sel.pelanggan_telepon && (
+              <Button
+                title="Chat WA Pelanggan"
+                icon="logo-whatsapp"
+                variant="success"
+                onPress={() => chatWA(sel)}
+                testID="detail-chat-wa"
+              />
+            )}
 
             {sel.status !== "batal" && (
               <Button title="Batalkan Pesanan" variant="danger" icon="close-circle-outline" onPress={cancel} loading={busy} testID="detail-cancel" />

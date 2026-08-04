@@ -14,6 +14,7 @@ const ITEMS: Item[] = [
   { label: "Laporan", sub: "Omzet, pengeluaran, laba", icon: "bar-chart", route: "/reports", color: C.brand, roles: ["owner"] },
   { label: "Layanan & Tarif", sub: "Kelola paket & harga", icon: "pricetags", route: "/services-manage", color: C.accent, roles: ["owner"] },
   { label: "Pengguna", sub: "Kelola peran akun", icon: "key", route: "/users", color: C.role_owner, roles: ["owner"] },
+  { label: "Pengaturan", sub: "Antar-jemput & kontak WA", icon: "settings", route: "/settings", color: C.muted, roles: ["owner"] },
 ];
 
 export default function More() {
