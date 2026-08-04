@@ -188,6 +188,11 @@ class ForgotPasswordIn(BaseModel):
     email: EmailStr
 
 
+class SettingsIn(BaseModel):
+    antar_jemput_enabled: bool = True
+    wa_kontak: Optional[str] = ""
+
+
 class ResetPasswordIn(BaseModel):
     token: str
     password: str
@@ -560,6 +565,9 @@ async def delete_order(oid: str, user: dict = Depends(require_roles("owner"))):
 # ----------------------- Customer portal RPC -----------------------
 @api_router.post("/orders/customer")
 async def pesan_pelanggan(body: CustomerOrderIn, user: dict = Depends(get_current_user)):
+    settings_doc = await get_settings_doc()
+    if not settings_doc.get("antar_jemput_enabled", True) and (body.butuh_jemput or body.butuh_antar):
+        raise HTTPException(400, "Layanan antar-jemput sedang tidak tersedia")
     doc = {
         "id": str(uuid.uuid4()),
         "nomor_invoice": await gen_invoice(),
@@ -777,6 +785,37 @@ async def set_role(uid: str, body: RoleUpdate, user: dict = Depends(require_role
     if body.role not in {"owner", "kasir", "pelanggan"}:
         raise HTTPException(400, "Peran tidak valid")
     await db.users.update_one({"id": uid}, {"$set": {"role": body.role}})
+    return {"ok": True}
+
+
+# ----------------------- Settings (Owner) -----------------------
+async def get_settings_doc() -> dict:
+    doc = await db.settings.find_one({"id": "main"})
+    if not doc:
+        doc = {"id": "main", "antar_jemput_enabled": True, "wa_kontak": ""}
+        await db.settings.insert_one(doc)
+    return doc
+
+
+@api_router.get("/settings/public")
+async def settings_public():
+    doc = await get_settings_doc()
+    return {"antar_jemput_enabled": doc.get("antar_jemput_enabled", True)}
+
+
+@api_router.get("/settings")
+async def settings_get(user: dict = Depends(require_roles("owner"))):
+    doc = await get_settings_doc()
+    return {"antar_jemput_enabled": doc.get("antar_jemput_enabled", True), "wa_kontak": doc.get("wa_kontak", "")}
+
+
+@api_router.put("/settings")
+async def settings_update(body: SettingsIn, user: dict = Depends(require_roles("owner"))):
+    await get_settings_doc()
+    await db.settings.update_one({"id": "main"}, {"$set": {
+        "antar_jemput_enabled": body.antar_jemput_enabled,
+        "wa_kontak": body.wa_kontak or "",
+    }})
     return {"ok": True}
 
 
