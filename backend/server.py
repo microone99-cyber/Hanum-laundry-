@@ -177,6 +177,8 @@ class OrderUpdate(BaseModel):
 class CustomerOrderIn(BaseModel):
     paket: str
     harga: int = 0
+    satuan: str = "kg"
+    qty: float = 1
     catatan: Optional[str] = ""
     butuh_jemput: bool = False
     alamat_jemput: Optional[str] = ""
@@ -568,6 +570,11 @@ async def pesan_pelanggan(body: CustomerOrderIn, user: dict = Depends(get_curren
     settings_doc = await get_settings_doc()
     if not settings_doc.get("antar_jemput_enabled", True) and (body.butuh_jemput or body.butuh_antar):
         raise HTTPException(400, "Layanan antar-jemput sedang tidak tersedia")
+
+    is_pcs = body.satuan == "pcs"
+    qty = max(1, body.qty) if is_pcs else 0
+    subtotal = int(qty * body.harga) if is_pcs else 0
+
     doc = {
         "id": str(uuid.uuid4()),
         "nomor_invoice": await gen_invoice(),
@@ -577,12 +584,12 @@ async def pesan_pelanggan(body: CustomerOrderIn, user: dict = Depends(get_curren
         "pelanggan_telepon": user.get("telepon", ""),
         "kasir_id": None,
         "kasir_nama": "Online",
-        "items": [{"nama_layanan": body.paket, "tipe": "kiloan", "satuan": "kg", "qty": 0, "harga": body.harga, "subtotal": 0}],
+        "items": [{"nama_layanan": body.paket, "tipe": "kiloan" if not is_pcs else "satuan", "satuan": body.satuan, "qty": qty, "harga": body.harga, "subtotal": subtotal}],
         "status": "proses",
-        "subtotal": 0,
+        "subtotal": subtotal,
         "diskon": 0,
         "diskon_nominal": 0,
-        "total": 0,
+        "total": subtotal,
         "bayar": 0,
         "kembalian": 0,
         "metode_bayar": "-",
@@ -592,7 +599,7 @@ async def pesan_pelanggan(body: CustomerOrderIn, user: dict = Depends(get_curren
         "alamat_jemput": body.alamat_jemput or "",
         "butuh_antar": body.butuh_antar,
         "alamat_antar": body.alamat_antar or "",
-        "perlu_timbang": True,
+        "perlu_timbang": not is_pcs,
         "estimasi_selesai": None,
         "owner_user_id": user["id"],
         "created_at": now_iso(),
@@ -657,13 +664,16 @@ async def delete_expense(eid: str, user: dict = Depends(require_roles("owner")))
 
 # ----------------------- Kas (cash book) -----------------------
 @api_router.get("/cash")
-async def list_cash(user: dict = Depends(require_roles("owner"))):
+async def list_cash(user: dict = Depends(require_staff)):
     rows = await db.kas.find().sort("tanggal", -1).to_list(1000)
+    if user["role"] == "kasir":
+        today = now_iso()[:10]  # YYYY-MM-DD
+        rows = [r for r in rows if str(r.get("tanggal", ""))[:10] == today]
     return [clean(r) for r in rows]
 
 
 @api_router.post("/cash")
-async def create_cash(body: CashIn, user: dict = Depends(require_roles("owner"))):
+async def create_cash(body: CashIn, user: dict = Depends(require_staff)):
     doc = {"id": str(uuid.uuid4()), "created_at": now_iso(), **body.dict()}
     if not doc.get("tanggal"):
         doc["tanggal"] = now_iso()
