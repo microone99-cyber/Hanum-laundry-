@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from dbshim import Database
 import os
 import logging
 import secrets
@@ -13,23 +13,48 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
+import smtplib
+from email.mime.text import MIMEText
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+DB_PATH = os.environ.get('DB_PATH', str(ROOT_DIR / 'laundry.db'))
+db = Database(DB_PATH)
 
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
 TOKEN_EXPIRE_DAYS = int(os.environ.get('ACCESS_TOKEN_EXPIRE_DAYS', '30'))
 
+SMTP_HOST = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', '465'))
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASS = os.environ.get('SMTP_PASS', '')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://hanum-laundry.vercel.app')
+
+
+def send_email(to: str, subject: str, body: str) -> bool:
+    if not SMTP_USER or not SMTP_PASS:
+        logging.warning("SMTP belum dikonfigurasi, email tidak terkirim (SMTP_USER/SMTP_PASS kosong)")
+        return False
+    try:
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = SMTP_USER
+        msg["To"] = to
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_USER, [to], msg.as_string())
+        return True
+    except Exception as e:
+        logging.error(f"Gagal kirim email ke {to}: {e}")
+        return False
+
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
 
-STAFF_ROLES = {"owner", "admin", "kasir"}
+STAFF_ROLES = {"owner", "kasir"}
 
 
 # ----------------------- Helpers -----------------------
@@ -149,18 +174,34 @@ class OrderUpdate(BaseModel):
     items: Optional[List[OrderItemIn]] = None
 
 
-class CustomerOrderItem(BaseModel):
-    nama: str
+class CustomerCartItemIn(BaseModel):
+    paket: str
     harga: int = 0
     satuan: str = "kg"
-    qty: int = 1
+    qty: float = 1
+
 
 class CustomerOrderIn(BaseModel):
-    items: List[CustomerOrderItem] = []
-    # legacy support
-    paket: Optional[str] = None
-    harga: Optional[int] = 0
+    items: List[CustomerCartItemIn]
     catatan: Optional[str] = ""
+    butuh_jemput: bool = False
+    alamat_jemput: Optional[str] = ""
+    butuh_antar: bool = False
+    alamat_antar: Optional[str] = ""
+
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class SettingsIn(BaseModel):
+    antar_jemput_enabled: bool = True
+    wa_kontak: Optional[str] = ""
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    password: str
 
 
 class ClaimIn(BaseModel):
@@ -244,12 +285,7 @@ async def register(body: RegisterIn):
     if existing:
         raise HTTPException(status_code=400, detail="Email sudah terdaftar")
     count = await db.users.count_documents({})
-    if count == 0:
-        role = "owner"
-    elif count < 3:
-        role = "admin"
-    else:
-        role = "pelanggan"
+    role = "owner" if count == 0 else "pelanggan"
     uid = str(uuid.uuid4())
     user = {
         "id": uid,
@@ -261,6 +297,16 @@ async def register(body: RegisterIn):
         "created_at": now_iso(),
     }
     await db.users.insert_one(user)
+    if role == "pelanggan":
+        # otomatis muncul di daftar Pelanggan yang staff lihat, tanpa perlu dibikinin kasir
+        await db.pelanggan.insert_one({
+            "id": str(uuid.uuid4()),
+            "nama": body.nama,
+            "telepon": body.telepon or "",
+            "alamat": "",
+            "user_id": uid,
+            "created_at": now_iso(),
+        })
     token = make_token(uid)
     return {"token": token, "user": {"id": uid, "email": user["email"], "nama": user["nama"], "role": role, "telepon": user["telepon"]}}
 
@@ -279,6 +325,50 @@ async def me(user: dict = Depends(get_current_user)):
     return {"id": user["id"], "email": user["email"], "nama": user["nama"], "role": user["role"], "telepon": user.get("telepon", "")}
 
 
+@api_router.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordIn):
+    user = await db.users.find_one({"email": body.email.lower()})
+    if user:
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        await db.password_resets.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": user["email"],
+            "token": token,
+            "expires_at": expires_at,
+            "used": False,
+            "created_at": now_iso(),
+        })
+        link = f"{FRONTEND_URL}/reset-password?token={token}"
+        send_email(
+            user["email"],
+            "Reset Kata Sandi - Hanum Laundry",
+            f"Halo {user['nama']},\n\n"
+            f"Kami menerima permintaan reset kata sandi untuk akun kamu.\n"
+            f"Klik link berikut untuk membuat kata sandi baru (berlaku 1 jam):\n{link}\n\n"
+            f"Kalau kamu tidak meminta ini, abaikan saja email ini.",
+        )
+    # Selalu balas sukses, biar tidak bocorin email mana yang terdaftar
+    return {"ok": True}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordIn):
+    if len(body.password) < 6:
+        raise HTTPException(400, "Kata sandi minimal 6 karakter")
+    reset = await db.password_resets.find_one({"token": body.token})
+    if not reset or reset.get("used"):
+        raise HTTPException(400, "Link reset tidak valid atau sudah dipakai")
+    if reset["expires_at"] < now_iso():
+        raise HTTPException(400, "Link reset sudah kedaluwarsa, silakan minta ulang")
+    user = await db.users.find_one({"email": reset["email"]})
+    if not user:
+        raise HTTPException(400, "Akun tidak ditemukan")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"password": hash_pw(body.password)}})
+    await db.password_resets.update_one({"id": reset["id"]}, {"$set": {"used": True}})
+    return {"ok": True}
+
+
 # ----------------------- Layanan -----------------------
 @api_router.get("/services")
 async def list_services(user: dict = Depends(get_current_user)):
@@ -287,14 +377,14 @@ async def list_services(user: dict = Depends(get_current_user)):
 
 
 @api_router.post("/services")
-async def create_service(body: ServiceIn, user: dict = Depends(require_roles("owner", "admin"))):
+async def create_service(body: ServiceIn, user: dict = Depends(require_roles("owner"))):
     doc = {"id": str(uuid.uuid4()), "created_at": now_iso(), **body.dict()}
     await db.layanan.insert_one(doc)
     return clean(doc)
 
 
 @api_router.put("/services/{sid}")
-async def update_service(sid: str, body: ServiceIn, user: dict = Depends(require_roles("owner", "admin"))):
+async def update_service(sid: str, body: ServiceIn, user: dict = Depends(require_roles("owner"))):
     await db.layanan.update_one({"id": sid}, {"$set": body.dict()})
     doc = await db.layanan.find_one({"id": sid})
     if not doc:
@@ -303,7 +393,7 @@ async def update_service(sid: str, body: ServiceIn, user: dict = Depends(require
 
 
 @api_router.delete("/services/{sid}")
-async def delete_service(sid: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def delete_service(sid: str, user: dict = Depends(require_roles("owner"))):
     await db.layanan.delete_one({"id": sid})
     return {"ok": True}
 
@@ -332,7 +422,7 @@ async def update_customer(cid: str, body: CustomerIn, user: dict = Depends(requi
 
 
 @api_router.delete("/customers/{cid}")
-async def delete_customer(cid: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def delete_customer(cid: str, user: dict = Depends(require_roles("owner"))):
     await db.pelanggan.delete_one({"id": cid})
     return {"ok": True}
 
@@ -481,6 +571,32 @@ async def delete_order(oid: str, user: dict = Depends(require_roles("owner"))):
 # ----------------------- Customer portal RPC -----------------------
 @api_router.post("/orders/customer")
 async def pesan_pelanggan(body: CustomerOrderIn, user: dict = Depends(get_current_user)):
+    settings_doc = await get_settings_doc()
+    if not settings_doc.get("antar_jemput_enabled", True) and (body.butuh_jemput or body.butuh_antar):
+        raise HTTPException(400, "Layanan antar-jemput sedang tidak tersedia")
+
+    if not body.items:
+        raise HTTPException(400, "Keranjang kosong")
+
+    items = []
+    subtotal_total = 0
+    ada_kiloan = False
+    for it in body.items:
+        is_pcs = it.satuan == "pcs"
+        qty = max(1, it.qty) if is_pcs else 0
+        sub = int(qty * it.harga) if is_pcs else 0
+        if not is_pcs:
+            ada_kiloan = True
+        items.append({
+            "nama_layanan": it.paket,
+            "tipe": "satuan" if is_pcs else "kiloan",
+            "satuan": it.satuan,
+            "qty": qty,
+            "harga": it.harga,
+            "subtotal": sub,
+        })
+        subtotal_total += sub
+
     doc = {
         "id": str(uuid.uuid4()),
         "nomor_invoice": await gen_invoice(),
@@ -490,38 +606,22 @@ async def pesan_pelanggan(body: CustomerOrderIn, user: dict = Depends(get_curren
         "pelanggan_telepon": user.get("telepon", ""),
         "kasir_id": None,
         "kasir_nama": "Online",
-        "items": [
-            {
-                "nama_layanan": it.nama,
-                "tipe": "kiloan" if it.satuan == "kg" else "satuan",
-                "satuan": it.satuan,
-                "qty": it.qty if it.satuan == "pcs" else 0,
-                "harga": it.harga,
-                "subtotal": it.harga * it.qty if it.satuan == "pcs" else 0,
-            }
-            for it in (body.items if body.items else [{"nama": body.paket, "harga": body.harga or 0, "satuan": "kg", "qty": 1}])
-        ] if not body.items else [
-            {
-                "nama_layanan": it.nama,
-                "tipe": "kiloan" if it.satuan == "kg" else "satuan",
-                "satuan": it.satuan,
-                "qty": it.qty if it.satuan == "pcs" else 0,
-                "harga": it.harga,
-                "subtotal": it.harga * it.qty if it.satuan == "pcs" else 0,
-            }
-            for it in body.items
-        ],
+        "items": items,
         "status": "proses",
-        "subtotal": 0,
+        "subtotal": subtotal_total,
         "diskon": 0,
         "diskon_nominal": 0,
-        "total": 0,
+        "total": subtotal_total,
         "bayar": 0,
         "kembalian": 0,
         "metode_bayar": "-",
         "status_bayar": "belum",
         "catatan": body.catatan or "",
-        "perlu_timbang": True,
+        "butuh_jemput": body.butuh_jemput,
+        "alamat_jemput": body.alamat_jemput or "",
+        "butuh_antar": body.butuh_antar,
+        "alamat_antar": body.alamat_antar or "",
+        "perlu_timbang": ada_kiloan,
         "estimasi_selesai": None,
         "owner_user_id": user["id"],
         "created_at": now_iso(),
@@ -555,13 +655,13 @@ async def batal_pesanan(oid: str, user: dict = Depends(get_current_user)):
 
 # ----------------------- Pengeluaran (expenses) -----------------------
 @api_router.get("/expenses")
-async def list_expenses(user: dict = Depends(require_staff)):
+async def list_expenses(user: dict = Depends(require_roles("owner"))):
     rows = await db.pengeluaran.find().sort("tanggal", -1).to_list(1000)
     return [clean(r) for r in rows]
 
 
 @api_router.post("/expenses")
-async def create_expense(body: ExpenseIn, user: dict = Depends(require_staff)):
+async def create_expense(body: ExpenseIn, user: dict = Depends(require_roles("owner"))):
     doc = {"id": str(uuid.uuid4()), "created_at": now_iso(), **body.dict()}
     if not doc.get("tanggal"):
         doc["tanggal"] = now_iso()
@@ -570,7 +670,7 @@ async def create_expense(body: ExpenseIn, user: dict = Depends(require_staff)):
 
 
 @api_router.put("/expenses/{eid}")
-async def update_expense(eid: str, body: ExpenseIn, user: dict = Depends(require_staff)):
+async def update_expense(eid: str, body: ExpenseIn, user: dict = Depends(require_roles("owner"))):
     await db.pengeluaran.update_one({"id": eid}, {"$set": body.dict()})
     doc = await db.pengeluaran.find_one({"id": eid})
     if not doc:
@@ -579,7 +679,7 @@ async def update_expense(eid: str, body: ExpenseIn, user: dict = Depends(require
 
 
 @api_router.delete("/expenses/{eid}")
-async def delete_expense(eid: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def delete_expense(eid: str, user: dict = Depends(require_roles("owner"))):
     await db.pengeluaran.delete_one({"id": eid})
     return {"ok": True}
 
@@ -588,6 +688,9 @@ async def delete_expense(eid: str, user: dict = Depends(require_roles("owner", "
 @api_router.get("/cash")
 async def list_cash(user: dict = Depends(require_staff)):
     rows = await db.kas.find().sort("tanggal", -1).to_list(1000)
+    if user["role"] == "kasir":
+        today = now_iso()[:10]  # YYYY-MM-DD
+        rows = [r for r in rows if str(r.get("tanggal", ""))[:10] == today]
     return [clean(r) for r in rows]
 
 
@@ -601,7 +704,7 @@ async def create_cash(body: CashIn, user: dict = Depends(require_staff)):
 
 
 @api_router.delete("/cash/{kid}")
-async def delete_cash(kid: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def delete_cash(kid: str, user: dict = Depends(require_roles("owner"))):
     await db.kas.delete_one({"id": kid})
     return {"ok": True}
 
@@ -615,7 +718,7 @@ def _dt(iso):
 
 
 @api_router.get("/dashboard")
-async def dashboard(user: dict = Depends(require_staff)):
+async def dashboard(user: dict = Depends(require_roles("owner"))):
     orders = await db.pesanan.find(
         {},
         {"_id": 0, "id": 1, "status": 1, "created_at": 1, "total": 1, "status_bayar": 1, "pelanggan_nama": 1,
@@ -654,7 +757,7 @@ async def dashboard(user: dict = Depends(require_staff)):
 
 
 @api_router.get("/reports")
-async def reports(dari: str, sampai: str, user: dict = Depends(require_roles("owner", "admin"))):
+async def reports(dari: str, sampai: str, user: dict = Depends(require_roles("owner"))):
     start = _dt(dari) or datetime.now(timezone.utc)
     end = _dt(sampai) or datetime.now(timezone.utc)
     end = end.replace(hour=23, minute=59, second=59)
@@ -704,16 +807,47 @@ async def reports(dari: str, sampai: str, user: dict = Depends(require_roles("ow
 
 # ----------------------- Users -----------------------
 @api_router.get("/users")
-async def list_users(user: dict = Depends(require_roles("owner", "admin"))):
+async def list_users(user: dict = Depends(require_roles("owner"))):
     rows = await db.users.find().sort("created_at", 1).to_list(500)
     return [{"id": r["id"], "email": r["email"], "nama": r["nama"], "role": r["role"], "telepon": r.get("telepon", "")} for r in rows]
 
 
 @api_router.put("/users/{uid}/role")
 async def set_role(uid: str, body: RoleUpdate, user: dict = Depends(require_roles("owner"))):
-    if body.role not in {"owner", "admin", "kasir", "pelanggan"}:
+    if body.role not in {"owner", "kasir", "pelanggan"}:
         raise HTTPException(400, "Peran tidak valid")
     await db.users.update_one({"id": uid}, {"$set": {"role": body.role}})
+    return {"ok": True}
+
+
+# ----------------------- Settings (Owner) -----------------------
+async def get_settings_doc() -> dict:
+    doc = await db.settings.find_one({"id": "main"})
+    if not doc:
+        doc = {"id": "main", "antar_jemput_enabled": True, "wa_kontak": ""}
+        await db.settings.insert_one(doc)
+    return doc
+
+
+@api_router.get("/settings/public")
+async def settings_public():
+    doc = await get_settings_doc()
+    return {"antar_jemput_enabled": doc.get("antar_jemput_enabled", True)}
+
+
+@api_router.get("/settings")
+async def settings_get(user: dict = Depends(require_roles("owner"))):
+    doc = await get_settings_doc()
+    return {"antar_jemput_enabled": doc.get("antar_jemput_enabled", True), "wa_kontak": doc.get("wa_kontak", "")}
+
+
+@api_router.put("/settings")
+async def settings_update(body: SettingsIn, user: dict = Depends(require_roles("owner"))):
+    await get_settings_doc()
+    await db.settings.update_one({"id": "main"}, {"$set": {
+        "antar_jemput_enabled": body.antar_jemput_enabled,
+        "wa_kontak": body.wa_kontak or "",
+    }})
     return {"ok": True}
 
 
@@ -744,4 +878,4 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    db.close()

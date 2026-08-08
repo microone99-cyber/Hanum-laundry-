@@ -18,6 +18,8 @@ const FILTERS = [
   { v: "batal", l: "Dibatalkan" },
 ];
 
+type TimbangVal = { berat: string; harga: string };
+
 export default function Orders() {
   const { user } = useAuth();
   const router = useRouter();
@@ -27,8 +29,7 @@ export default function Orders() {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("");
   const [sel, setSel] = useState<any>(null);
-  const [berat, setBerat] = useState("");
-  const [hargaKg, setHargaKg] = useState("");
+  const [timbangVals, setTimbangVals] = useState<Record<number, TimbangVal>>({});
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -43,8 +44,16 @@ export default function Orders() {
 
   const openDetail = (o: any) => {
     setSel(o);
-    setBerat(o.items?.[0]?.qty ? String(o.items[0].qty) : "");
-    setHargaKg(o.items?.[0]?.harga ? String(o.items[0].harga) : "");
+    const vals: Record<number, TimbangVal> = {};
+    (o.items || []).forEach((it: any, idx: number) => {
+      if (it.satuan !== "pcs") {
+        vals[idx] = {
+          berat: it.qty ? String(it.qty) : "",
+          harga: it.harga ? String(it.harga) : "",
+        };
+      }
+    });
+    setTimbangVals(vals);
   };
 
   const act = async (fn: () => Promise<any>) => {
@@ -61,13 +70,26 @@ export default function Orders() {
 
   const setStatus = (status: string) => act(() => api.put(`/orders/${sel.id}`, { status }));
   const setBayar = (status_bayar: string) => act(() => api.put(`/orders/${sel.id}`, { status_bayar }));
+
+  // Fix: dulu ini me-replace SELURUH items jadi cuma 1 item (item pertama),
+  // jadi kalau pesanan punya beberapa item, sisanya hilang & total salah.
+  // Sekarang: tiap item kiloan ditimbang & dihargai masing-masing per paket,
+  // item pcs/satuan (yang udah pasti harganya dari awal) dibiarkan apa adanya,
+  // lalu semuanya dikirim utuh biar backend jumlahin totalnya dengan benar.
   const timbang = () =>
-    act(() =>
-      api.put(`/orders/${sel.id}`, {
-        items: [{ ...sel.items[0], qty: parseFloat(berat.replace(",", ".")) || 0, harga: parseInt(hargaKg) || 0 }],
-        diskon: sel.diskon || 0,
-      })
-    );
+    act(() => {
+      const items = (sel.items || []).map((it: any, idx: number) => {
+        const v = timbangVals[idx];
+        if (it.satuan !== "pcs" && v) {
+          const berat = parseFloat((v.berat || "0").replace(",", ".")) || 0;
+          const harga = parseInt(v.harga || "0", 10) || 0;
+          return { ...it, qty: berat, harga };
+        }
+        return it;
+      });
+      return api.put(`/orders/${sel.id}`, { items, diskon: sel.diskon || 0 });
+    });
+
   const cancel = () => act(() => api.post(`/orders/${sel.id}/cancel`));
   const hapus = async () => { await api.del(`/orders/${sel.id}`); setSel(null); load(); };
 
@@ -147,8 +169,10 @@ export default function Orders() {
               <View style={{ height: 1, backgroundColor: C.border, marginVertical: 4 }} />
               {(sel.items || []).map((it: any, idx: number) => (
                 <View key={idx} style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <AppText style={{ flex: 1 }}>{it.nama_layanan} ({it.qty}{it.satuan})</AppText>
-                  <AppText weight="semibold">{rupiah(it.subtotal)}</AppText>
+                  <AppText style={{ flex: 1 }}>
+                    {it.nama_layanan} ({it.satuan === "pcs" ? it.qty : (it.qty || 0)}{it.satuan})
+                  </AppText>
+                  <AppText weight="semibold">{it.satuan !== "pcs" && !it.qty ? "Belum ditimbang" : rupiah(it.subtotal)}</AppText>
                 </View>
               ))}
               <View style={{ height: 1, backgroundColor: C.border, marginVertical: 4 }} />
@@ -156,10 +180,34 @@ export default function Orders() {
             </Card>
 
             {sel.perlu_timbang && sel.status !== "batal" && (
-              <Card style={{ gap: SP.sm }}>
+              <Card style={{ gap: SP.md }}>
                 <AppText weight="bold">Timbang & Set Harga</AppText>
-                <Field label="Berat (kg)" keyboardType="decimal-pad" value={berat} onChangeText={setBerat} testID="timbang-berat" />
-                <Field label="Harga / kg" keyboardType="number-pad" value={hargaKg} onChangeText={setHargaKg} testID="timbang-harga" />
+                <AppText style={{ color: C.muted, fontSize: 12, marginTop: -SP.sm }}>
+                  Item pcs/satuan sudah pasti harganya. Timbang tiap paket kiloan di bawah, nanti otomatis dijumlah ke total.
+                </AppText>
+                {(sel.items || []).map((it: any, idx: number) => {
+                  if (it.satuan === "pcs") return null;
+                  const v = timbangVals[idx] || { berat: "", harga: "" };
+                  return (
+                    <View key={idx} style={{ gap: SP.sm, paddingTop: SP.xs, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: C.border }}>
+                      <AppText weight="semibold" style={{ fontSize: 13 }}>{it.nama_layanan}</AppText>
+                      <Field
+                        label="Berat (kg)"
+                        keyboardType="decimal-pad"
+                        value={v.berat}
+                        onChangeText={(t) => setTimbangVals((old) => ({ ...old, [idx]: { ...old[idx], berat: t } }))}
+                        testID={`timbang-berat-${idx}`}
+                      />
+                      <Field
+                        label="Harga / kg"
+                        keyboardType="number-pad"
+                        value={v.harga}
+                        onChangeText={(t) => setTimbangVals((old) => ({ ...old, [idx]: { ...old[idx], harga: t } }))}
+                        testID={`timbang-harga-${idx}`}
+                      />
+                    </View>
+                  );
+                })}
                 <Button title="Simpan Timbangan" onPress={timbang} loading={busy} testID="timbang-save" />
               </Card>
             )}
