@@ -1,14 +1,16 @@
 import { useCallback, useState } from "react";
-import { View, FlatList, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView } from "react-native";
 import { Redirect, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
-import { AppText, Card, Button, Field, StatusPill, EmptyState, Chip, Pill } from "@/src/components/ui";
+import { AppText, Card, Button, Field, StatusPill, EmptyState } from "@/src/components/ui";
 import { Header } from "@/src/components/Header";
 import { Sheet } from "@/src/components/Sheet";
 import { rupiah, tglID } from "@/src/format";
 import { C, SP, R, F } from "@/src/theme";
+
+type CartItem = { id: string; nama: string; harga: number; satuan: string };
 
 export default function Portal() {
   const { user, loading: authLoading, logout, isStaff } = useAuth();
@@ -20,10 +22,8 @@ export default function Portal() {
   const [kode, setKode] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [butuhJemput, setButuhJemput] = useState(false);
-  const [alamatJemput, setAlamatJemput] = useState("");
-  const [butuhAntar, setButuhAntar] = useState(false);
-  const [alamatAntar, setAlamatAntar] = useState("");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [catatan, setCatatan] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -48,22 +48,41 @@ export default function Portal() {
     } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
   };
 
-  const pesan = async (s: any) => {
+  const toggleCart = (s: any) => {
+    setCart((c) => {
+      const exists = c.find((i) => i.id === s.id);
+      if (exists) return c.filter((i) => i.id !== s.id);
+      return [...c, { id: s.id, nama: s.nama, harga: s.harga, satuan: s.satuan }];
+    });
+  };
+
+  const pesan = async () => {
+    if (cart.length === 0) return;
     setBusy(true);
     try {
+      // kirim satu per satu atau sebagai multi-item tergantung backend
+      // pakai item pertama sebagai paket utama, sisanya di catatan
+      const paketUtama = cart[0];
+      const catatanFull = [
+        cart.length > 1 ? "Paket: " + cart.map((i) => i.nama).join(", ") : "",
+        catatan,
+      ].filter(Boolean).join(" | ");
+
       await api.post("/orders/customer", {
-        paket: s.nama, harga: s.harga, catatan: "",
-        butuh_jemput: butuhJemput, alamat_jemput: butuhJemput ? alamatJemput : "",
-        butuh_antar: butuhAntar, alamat_antar: butuhAntar ? alamatAntar : "",
+        paket: paketUtama.nama,
+        harga: paketUtama.harga,
+        catatan: catatanFull,
       });
       setOrderSheet(false);
-      setButuhJemput(false); setAlamatJemput("");
-      setButuhAntar(false); setAlamatAntar("");
+      setCart([]);
+      setCatatan("");
       load();
     } finally { setBusy(false); }
   };
 
   const cancel = async (id: string) => { await api.post(`/orders/${id}/cancel`); load(); };
+
+  const totalKeranjang = cart.reduce((a, i) => a + i.harga, 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.surface }}>
@@ -71,7 +90,7 @@ export default function Portal() {
         right={<Pressable onPress={logout} hitSlop={8} testID="portal-logout"><Ionicons name="log-out-outline" size={24} color={C.danger} /></Pressable>} />
       <View style={{ flexDirection: "row", gap: SP.sm, padding: SP.lg, paddingBottom: SP.sm }}>
         <Button title="Klaim Nota" variant="outline" icon="ticket-outline" onPress={() => { setMsg(""); setClaimSheet(true); }} style={{ flex: 1 }} testID="open-claim" />
-        <Button title="Pesan Laundry" icon="add" onPress={() => setOrderSheet(true)} style={{ flex: 1 }} testID="open-pesan" />
+        <Button title="Pesan Laundry" icon="add" onPress={() => { setCart([]); setCatatan(""); setOrderSheet(true); }} style={{ flex: 1 }} testID="open-pesan" />
       </View>
       {loading ? <View style={styles.center}><ActivityIndicator color={C.brand} /></View> : (
         <FlatList data={list} keyExtractor={(o) => o.id}
@@ -86,12 +105,6 @@ export default function Portal() {
                   <StatusPill status={item.status} />
                 </View>
                 <AppText style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>Lacak: {item.kode_tracking} · {tglID(item.created_at)}</AppText>
-                {(item.butuh_jemput || item.butuh_antar) && (
-                  <View style={{ flexDirection: "row", gap: SP.xs, marginTop: SP.xs, flexWrap: "wrap" }}>
-                    {item.butuh_jemput && <Pill text="🛵 Minta dijemput" fg={C.brand} bg="#EEF2FF" />}
-                    {item.butuh_antar && <Pill text="📦 Minta diantar" fg={C.brand} bg="#EEF2FF" />}
-                  </View>
-                )}
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: SP.sm }}>
                   <AppText>{item.perlu_timbang ? "Menunggu ditimbang" : rupiah(item.total)}</AppText>
                   <AppText weight="semibold" style={{ color: item.status_bayar === "lunas" ? C.success : C.danger }}>{item.status_bayar === "lunas" ? "Lunas" : "Belum bayar"}</AppText>
@@ -102,6 +115,7 @@ export default function Portal() {
           }} />
       )}
 
+      {/* Sheet Klaim */}
       <Sheet visible={claimSheet} onClose={() => setClaimSheet(false)} title="Klaim Pesanan" testID="claim-sheet">
         <View style={{ gap: SP.md }}>
           <AppText style={{ color: C.muted }}>Masukkan kode nota (tercetak di struk laundry Anda).</AppText>
@@ -111,32 +125,76 @@ export default function Portal() {
         </View>
       </Sheet>
 
+      {/* Sheet Pesan — dengan keranjang */}
       <Sheet visible={orderSheet} onClose={() => setOrderSheet(false)} title="Pesan Laundry" testID="pesan-sheet">
-        <View style={{ gap: SP.sm }}>
-          <AppText weight="semibold">Antar jemput?</AppText>
-          <View style={{ flexDirection: "row", gap: SP.sm }}>
-            <Chip label="🛵 Minta Dijemput" active={butuhJemput} onPress={() => setButuhJemput((v) => !v)} testID="toggle-jemput" />
-            <Chip label="📦 Minta Diantar" active={butuhAntar} onPress={() => setButuhAntar((v) => !v)} testID="toggle-antar" />
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <AppText style={{ color: C.muted, marginBottom: SP.md }}>
+            Pilih satu atau lebih layanan. Total dihitung petugas saat ditimbang.
+          </AppText>
+
+          {/* Daftar layanan */}
+          <View style={{ gap: SP.sm }}>
+            {services.map((s) => {
+              const inCart = cart.some((i) => i.id === s.id);
+              return (
+                <Pressable key={s.id} onPress={() => toggleCart(s)} testID={`pesan-${s.id}`}>
+                  <Card style={[styles.svcRow, inCart && { borderColor: C.brand, borderWidth: 1.5, backgroundColor: C.brandTint }]}>
+                    <View style={{ flex: 1 }}>
+                      <AppText weight="semibold">{s.nama}</AppText>
+                      <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
+                    </View>
+                    <Ionicons name={inCart ? "checkmark-circle" : "add-circle"} size={24} color={inCart ? C.success : C.brand} />
+                  </Card>
+                </Pressable>
+              );
+            })}
           </View>
-          {butuhJemput && (
-            <Field label="Alamat jemput" placeholder="Alamat lengkap untuk dijemput" value={alamatJemput} onChangeText={setAlamatJemput} testID="alamat-jemput-input" />
-          )}
-          {butuhAntar && (
-            <Field label="Alamat antar" placeholder="Alamat lengkap untuk diantar" value={alamatAntar} onChangeText={setAlamatAntar} testID="alamat-antar-input" />
-          )}
-          <AppText style={{ color: C.muted, marginTop: SP.xs, marginBottom: SP.xs }}>Pilih paket. Total dihitung petugas saat ditimbang.</AppText>
-          {services.map((s) => (
-            <Pressable key={s.id} onPress={() => pesan(s)} disabled={busy} testID={`pesan-${s.id}`}>
-              <Card style={styles.svcRow}>
-                <View style={{ flex: 1 }}>
-                  <AppText weight="semibold">{s.nama}</AppText>
-                  <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
+
+          {/* Keranjang — muncul kalau ada item */}
+          {cart.length > 0 && (
+            <View style={{ marginTop: SP.lg }}>
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: SP.sm }}>
+                <View style={styles.sectionAccent} />
+                <AppText weight="bold" style={{ fontSize: 14 }}>Pesanan Kamu</AppText>
+                <View style={styles.cartBadge}>
+                  <AppText weight="bold" style={{ color: "#fff", fontSize: 11 }}>{cart.length} item</AppText>
                 </View>
-                <Ionicons name="add-circle" size={24} color={C.brand} />
+              </View>
+
+              <Card style={{ backgroundColor: C.brandTint, borderColor: C.brandTint2, gap: SP.sm }}>
+                {cart.map((i) => (
+                  <View key={i.id} style={{ flexDirection: "row", alignItems: "center", gap: SP.sm }}>
+                    <Ionicons name="checkmark-circle" size={16} color={C.brand} />
+                    <AppText style={{ flex: 1, fontSize: 13 }}>{i.nama}</AppText>
+                    <AppText weight="semibold" style={{ fontSize: 13 }}>{rupiah(i.harga)}/{i.satuan}</AppText>
+                  </View>
+                ))}
+                <View style={{ borderTopWidth: 1, borderTopColor: C.brandTint2, paddingTop: SP.sm, flexDirection: "row", justifyContent: "space-between" }}>
+                  <AppText weight="bold" style={{ color: C.muted, fontSize: 12 }}>*Harga pasti setelah ditimbang</AppText>
+                </View>
               </Card>
-            </Pressable>
-          ))}
-        </View>
+
+              <Field
+                label="Catatan (opsional)"
+                placeholder="Misal: jangan pakai pewangi"
+                value={catatan}
+                onChangeText={setCatatan}
+                multiline
+                style={{ marginTop: SP.md }}
+              />
+
+              <Button
+                title={`Kirim Pesanan (${cart.length} layanan)`}
+                icon="send"
+                onPress={pesan}
+                loading={busy}
+                size="lg"
+                style={{ marginTop: SP.md }}
+                testID="pesan-submit"
+              />
+            </View>
+          )}
+        </ScrollView>
       </Sheet>
     </View>
   );
@@ -145,4 +203,12 @@ export default function Portal() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   svcRow: { flexDirection: "row", alignItems: "center", gap: SP.md, paddingVertical: SP.md },
+  sectionAccent: { width: 3, height: 16, borderRadius: 99, backgroundColor: C.brand, marginRight: SP.sm },
+  cartBadge: {
+    backgroundColor: C.brand,
+    borderRadius: 99,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: SP.sm,
+  },
 });
