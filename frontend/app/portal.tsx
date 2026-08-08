@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView } from "react-native";
+import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, TextInput } from "react-native";
 import { Redirect, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
@@ -10,7 +10,7 @@ import { Sheet } from "@/src/components/Sheet";
 import { rupiah, tglID } from "@/src/format";
 import { C, SP, R, F } from "@/src/theme";
 
-type CartItem = { id: string; nama: string; harga: number; satuan: string; kategori: string };
+type CartItem = { id: string; nama: string; harga: number; satuan: string; kategori: string; qty: number };
 
 export default function Portal() {
   const { user, loading: authLoading, logout, isStaff } = useAuth();
@@ -57,8 +57,16 @@ export default function Portal() {
     setCart((c) => {
       const exists = c.find((i) => i.id === s.id);
       if (exists) return c.filter((i) => i.id !== s.id);
-      return [...c, { id: s.id, nama: s.nama, harga: s.harga, satuan: s.satuan, kategori: s.kategori }];
+      return [...c, { id: s.id, nama: s.nama, harga: s.harga, satuan: s.satuan, kategori: s.kategori, qty: 1 }];
     });
+  };
+
+  const updateQty = (id: string, qty: number) => {
+    if (qty < 1) {
+      setCart((c) => c.filter((i) => i.id !== id));
+      return;
+    }
+    setCart((c) => c.map((i) => i.id === id ? { ...i, qty } : i));
   };
 
   const pesan = async () => {
@@ -66,7 +74,7 @@ export default function Portal() {
     setBusy(true);
     try {
       const antarInfo = antar === "jemput" ? "[Minta Dijemput] " : antar === "antar" ? "[Minta Diantar] " : "";
-      const paketNama = cart.map((i) => i.nama).join(" + ");
+      const paketNama = cart.map((i) => i.satuan === "pcs" ? `${i.nama} x${i.qty}` : i.nama).join(" + ");
       const catatanFull = [antarInfo + paketNama, catatan].filter(Boolean).join(" | ");
       await api.post("/orders/customer", {
         paket: cart[0].nama,
@@ -80,6 +88,8 @@ export default function Portal() {
   };
 
   const cancel = async (id: string) => { await api.post(`/orders/${id}/cancel`); load(); };
+
+  const totalPcs = cart.filter((i) => i.satuan === "pcs").reduce((a, i) => a + i.harga * i.qty, 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.surface }}>
@@ -123,28 +133,21 @@ export default function Portal() {
         </View>
       </Sheet>
 
-      {/* Sheet Pesan — dengan keranjang + kategori */}
+      {/* Sheet Pesan */}
       <Sheet visible={orderSheet} onClose={() => setOrderSheet(false)} title="Pesan Laundry" testID="pesan-sheet">
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           {/* Antar jemput */}
           <AppText weight="semibold" style={{ fontSize: 14, marginBottom: SP.sm }}>Antar jemput?</AppText>
           <View style={{ flexDirection: "row", gap: SP.sm, marginBottom: SP.md }}>
-            <Pressable
-              onPress={() => setAntar(antar === "jemput" ? null : "jemput")}
-              style={[styles.antarBtn, antar === "jemput" && styles.antarBtnActive]}
-            >
+            <Pressable onPress={() => setAntar(antar === "jemput" ? null : "jemput")} style={[styles.antarBtn, antar === "jemput" && styles.antarBtnActive]}>
               <AppText style={{ fontSize: 13, color: antar === "jemput" ? C.brand : C.ink }}>🛵 Minta Dijemput</AppText>
             </Pressable>
-            <Pressable
-              onPress={() => setAntar(antar === "antar" ? null : "antar")}
-              style={[styles.antarBtn, antar === "antar" && styles.antarBtnActive]}
-            >
+            <Pressable onPress={() => setAntar(antar === "antar" ? null : "antar")} style={[styles.antarBtn, antar === "antar" && styles.antarBtnActive]}>
               <AppText style={{ fontSize: 13, color: antar === "antar" ? C.brand : C.ink }}>📦 Minta Diantar</AppText>
             </Pressable>
           </View>
 
-          {/* Info */}
           <AppText style={{ color: C.muted, fontSize: 13, marginBottom: SP.md, lineHeight: 19 }}>
             Geser kategori di bawah untuk lihat paket lainnya.{"\n"}
             Cucian kiloan dihitung petugas saat ditimbang; item satuan (pcs) langsung pasti harganya.
@@ -160,22 +163,40 @@ export default function Portal() {
           {/* Daftar layanan */}
           <View style={{ gap: SP.sm }}>
             {filteredServices.map((s) => {
-              const inCart = cart.some((i) => i.id === s.id);
+              const cartItem = cart.find((i) => i.id === s.id);
+              const inCart = !!cartItem;
               return (
-                <Pressable key={s.id} onPress={() => toggleCart(s)} testID={`pesan-${s.id}`}>
-                  <Card style={[styles.svcRow, inCart && { borderColor: C.brand, borderWidth: 1.5, backgroundColor: C.brandTint }]}>
-                    <View style={{ flex: 1 }}>
-                      <AppText weight="semibold">{s.nama}</AppText>
-                      <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
+                <Card key={s.id} style={[styles.svcRow, inCart && { borderColor: C.brand, borderWidth: 1.5, backgroundColor: C.brandTint }]}>
+                  <Pressable style={{ flex: 1 }} onPress={() => toggleCart(s)} testID={`pesan-${s.id}`}>
+                    <AppText weight="semibold">{s.nama}</AppText>
+                    <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
+                  </Pressable>
+
+                  {/* Kalau pcs dan sudah di cart → tampilkan stepper qty */}
+                  {inCart && s.satuan === "pcs" ? (
+                    <View style={styles.stepper}>
+                      <Pressable onPress={() => updateQty(s.id, cartItem.qty - 1)} style={styles.stepBtn}>
+                        <Ionicons name="remove" size={16} color={C.ink} />
+                      </Pressable>
+                      <TextInput
+                        style={styles.qtyInput}
+                        keyboardType="number-pad"
+                        value={String(cartItem.qty)}
+                        onChangeText={(t) => updateQty(s.id, parseInt(t) || 1)}
+                      />
+                      <Pressable onPress={() => updateQty(s.id, cartItem.qty + 1)} style={styles.stepBtn}>
+                        <Ionicons name="add" size={16} color={C.ink} />
+                      </Pressable>
                     </View>
+                  ) : (
                     <Ionicons name={inCart ? "checkmark-circle" : "add-circle"} size={24} color={inCart ? C.success : C.brand} />
-                  </Card>
-                </Pressable>
+                  )}
+                </Card>
               );
             })}
           </View>
 
-          {/* Keranjang — muncul kalau ada item */}
+          {/* Keranjang */}
           {cart.length > 0 && (
             <View style={{ marginTop: SP.lg }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: SP.sm, marginBottom: SP.sm }}>
@@ -190,11 +211,19 @@ export default function Portal() {
                 {cart.map((i) => (
                   <View key={i.id} style={{ flexDirection: "row", alignItems: "center", gap: SP.sm }}>
                     <Ionicons name="checkmark-circle" size={16} color={C.brand} />
-                    <AppText style={{ flex: 1, fontSize: 13 }}>{i.nama}</AppText>
-                    <AppText weight="semibold" style={{ fontSize: 12, color: C.muted }}>{i.satuan === "kg" ? "ditimbang" : rupiah(i.harga)}</AppText>
+                    <AppText style={{ flex: 1, fontSize: 13 }}>{i.nama}{i.satuan === "pcs" ? ` × ${i.qty}` : ""}</AppText>
+                    <AppText weight="semibold" style={{ fontSize: 12, color: C.muted }}>
+                      {i.satuan === "kg" ? "ditimbang" : rupiah(i.harga * i.qty)}
+                    </AppText>
                   </View>
                 ))}
-                <AppText style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>*Harga kiloan dihitung petugas saat ditimbang</AppText>
+                {totalPcs > 0 && (
+                  <View style={{ borderTopWidth: 1, borderTopColor: C.brandTint2, paddingTop: SP.sm, flexDirection: "row", justifyContent: "space-between" }}>
+                    <AppText style={{ fontSize: 12, color: C.muted }}>Total item pcs</AppText>
+                    <AppText weight="bold" style={{ fontSize: 12, color: C.brand }}>{rupiah(totalPcs)}</AppText>
+                  </View>
+                )}
+                <AppText style={{ fontSize: 11, color: C.muted }}>*Harga kiloan dihitung petugas saat ditimbang</AppText>
               </Card>
 
               <Field
@@ -229,24 +258,21 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   svcRow: { flexDirection: "row", alignItems: "center", gap: SP.md, paddingVertical: SP.md },
   antarBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: SP.sm,
-    borderRadius: R.pill,
-    borderWidth: 1.5,
-    borderColor: C.border,
-    alignItems: "center",
-    backgroundColor: C.panel,
+    flex: 1, paddingVertical: 10, paddingHorizontal: SP.sm,
+    borderRadius: R.pill, borderWidth: 1.5, borderColor: C.border,
+    alignItems: "center", backgroundColor: C.panel,
   },
-  antarBtnActive: {
-    borderColor: C.brand,
-    backgroundColor: C.brandTint,
+  antarBtnActive: { borderColor: C.brand, backgroundColor: C.brandTint },
+  stepper: { flexDirection: "row", alignItems: "center", gap: 4 },
+  stepBtn: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
+    alignItems: "center", justifyContent: "center",
+  },
+  qtyInput: {
+    width: 36, textAlign: "center",
+    fontFamily: F.bold, fontSize: 14, color: C.ink,
   },
   sectionAccent: { width: 3, height: 16, borderRadius: 99, backgroundColor: C.brand },
-  cartBadge: {
-    backgroundColor: C.brand,
-    borderRadius: 99,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
+  cartBadge: { backgroundColor: C.brand, borderRadius: 99, paddingHorizontal: 8, paddingVertical: 2 },
 });
