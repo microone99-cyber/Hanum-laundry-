@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet, Pressable } from "react-native";
+import { View, StyleSheet, Pressable, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "@/src/components/ui";
@@ -28,6 +28,11 @@ export function Header({
               <Ionicons name="chevron-back" size={26} color={C.ink} />
             </Pressable>
           )}
+          <Image
+            source={require("@/assets/images/logo-header.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <View style={{ flex: 1 }}>
             <AppText weight="extrabold" style={{ fontSize: 22 }}>{title}</AppText>
             {subtitle ? <AppText style={{ color: C.muted, fontSize: 13, marginTop: 1 }}>{subtitle}</AppText> : null}
@@ -48,4 +53,5 @@ const styles = StyleSheet.create({
     borderBottomColor: C.border,
   },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: SP.md },
+  logo: { width: 34, height: 34, borderRadius: 8 },
 });
