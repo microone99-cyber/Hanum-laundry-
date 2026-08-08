@@ -25,15 +25,19 @@ export default function Portal() {
   const [butuhAntar, setButuhAntar] = useState(false);
   const [alamatAntar, setAlamatAntar] = useState("");
   const [antarJemputEnabled, setAntarJemputEnabled] = useState(true);
+  const [cat, setCat] = useState<string>("");
+  const [pcsQty, setPcsQty] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     try {
       const [mine, svc, settings] = await Promise.all([api.get("/orders/mine"), api.get("/services"), api.get("/settings/public")]);
       setList(mine);
-      setServices(svc.filter((s: any) => s.aktif));
+      const active = svc.filter((s: any) => s.aktif);
+      setServices(active);
+      if (!cat && active.length) setCat(active[0].kategori);
       setAntarJemputEnabled(!!settings.antar_jemput_enabled);
     } finally { setLoading(false); }
-  }, []);
+  }, [cat]);
   useFocusEffect(useCallback(() => { if (user && !isStaff) load(); }, [load, user, isStaff]));
 
   if (authLoading) return null;
@@ -50,17 +54,18 @@ export default function Portal() {
     } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
   };
 
-  const pesan = async (s: any) => {
+  const pesan = async (s: any, qty: number = 1) => {
     setBusy(true);
     try {
       await api.post("/orders/customer", {
-        paket: s.nama, harga: s.harga, catatan: "",
+        paket: s.nama, harga: s.harga, satuan: s.satuan, qty,
         butuh_jemput: butuhJemput, alamat_jemput: butuhJemput ? alamatJemput : "",
         butuh_antar: butuhAntar, alamat_antar: butuhAntar ? alamatAntar : "",
       });
       setOrderSheet(false);
       setButuhJemput(false); setAlamatJemput("");
       setButuhAntar(false); setAlamatAntar("");
+      setPcsQty({});
       load();
     } finally { setBusy(false); }
   };
@@ -130,18 +135,52 @@ export default function Portal() {
               )}
             </>
           )}
-          <AppText style={{ color: C.muted, marginTop: SP.xs, marginBottom: SP.xs }}>Pilih paket. Total dihitung petugas saat ditimbang.</AppText>
-          {services.map((s) => (
-            <Pressable key={s.id} onPress={() => pesan(s)} disabled={busy} testID={`pesan-${s.id}`}>
-              <Card style={styles.svcRow}>
-                <View style={{ flex: 1 }}>
-                  <AppText weight="semibold">{s.nama}</AppText>
-                  <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
-                </View>
-                <Ionicons name="add-circle" size={24} color={C.brand} />
-              </Card>
-            </Pressable>
-          ))}
+          <AppText style={{ color: C.muted, marginTop: SP.xs }}>
+            Geser kategori di bawah untuk lihat paket lainnya. Cucian kiloan dihitung petugas saat ditimbang; item satuan (pcs) langsung pasti harganya.
+          </AppText>
+          <View style={{ flexDirection: "row", gap: SP.sm, marginVertical: SP.xs, flexWrap: "wrap" }}>
+            {[...new Set(services.map((s) => s.kategori))].map((c) => (
+              <Chip key={c} label={c} active={c === cat} onPress={() => setCat(c)} testID={`portal-cat-${c}`} />
+            ))}
+          </View>
+          {services.filter((s) => s.kategori === cat).map((s) => {
+            if (s.satuan === "pcs") {
+              const qty = pcsQty[s.id] || 1;
+              return (
+                <Card key={s.id} style={{ gap: SP.xs }} testID={`pesan-pcs-${s.id}`}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <View style={{ flex: 1 }}>
+                      <AppText weight="semibold">{s.nama}</AppText>
+                      <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: SP.xs }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: SP.sm }}>
+                      <Pressable onPress={() => setPcsQty((p) => ({ ...p, [s.id]: Math.max(1, qty - 1) }))} style={styles.stepBtn} testID={`pcs-minus-${s.id}`}>
+                        <Ionicons name="remove" size={16} color={C.ink} />
+                      </Pressable>
+                      <AppText weight="semibold" style={{ minWidth: 24, textAlign: "center" }}>{qty}</AppText>
+                      <Pressable onPress={() => setPcsQty((p) => ({ ...p, [s.id]: qty + 1 }))} style={styles.stepBtn} testID={`pcs-plus-${s.id}`}>
+                        <Ionicons name="add" size={16} color={C.ink} />
+                      </Pressable>
+                    </View>
+                    <Button title={`Pesan · ${rupiah(qty * s.harga)}`} onPress={() => pesan(s, qty)} disabled={busy} testID={`pesan-confirm-${s.id}`} />
+                  </View>
+                </Card>
+              );
+            }
+            return (
+              <Pressable key={s.id} onPress={() => pesan(s, 1)} disabled={busy} testID={`pesan-${s.id}`}>
+                <Card style={styles.svcRow}>
+                  <View style={{ flex: 1 }}>
+                    <AppText weight="semibold">{s.nama}</AppText>
+                    <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
+                  </View>
+                  <Ionicons name="add-circle" size={24} color={C.brand} />
+                </Card>
+              </Pressable>
+            );
+          })}
         </View>
       </Sheet>
     </View>
@@ -151,4 +190,5 @@ export default function Portal() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   svcRow: { flexDirection: "row", alignItems: "center", gap: SP.md, paddingVertical: SP.md },
+  stepBtn: { width: 30, height: 30, borderRadius: R.sm, backgroundColor: C.panel2, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
 });

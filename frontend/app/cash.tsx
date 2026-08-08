@@ -14,6 +14,7 @@ export default function Cash() {
   const { user } = useAuth();
   const router = useRouter();
   const canDelete = user && user.role === "owner";
+  const isKasir = user?.role === "kasir";
   const [list, setList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sheet, setSheet] = useState(false);
@@ -28,9 +29,12 @@ export default function Cash() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const now = new Date();
-  const bulan = list.filter((k) => { const d = new Date(k.tanggal); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
-  const masuk = bulan.filter((k) => k.jenis === "masuk").reduce((a, k) => a + (k.nominal || 0), 0);
-  const keluar = bulan.filter((k) => k.jenis === "keluar").reduce((a, k) => a + (k.nominal || 0), 0);
+  const today = now.toISOString().slice(0, 10);
+  // Untuk kasir, backend sudah kirim data hari ini saja. Untuk owner, filter per bulan seperti biasa.
+  const scoped = isKasir ? list.filter((k) => String(k.tanggal).slice(0, 10) === today) : list.filter((k) => { const d = new Date(k.tanggal); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+  const masuk = scoped.filter((k) => k.jenis === "masuk").reduce((a, k) => a + (k.nominal || 0), 0);
+  const keluar = scoped.filter((k) => k.jenis === "keluar").reduce((a, k) => a + (k.nominal || 0), 0);
+  const periodLabel = isKasir ? "Hari Ini" : "Bulan Ini";
 
   const save = async () => {
     if (!(parseInt(nominal) > 0)) return;
@@ -47,11 +51,16 @@ export default function Cash() {
       <Header title="Kas / Laci" subtitle="Buku kas masuk & keluar" back onBack={() => router.back()}
         right={<Pressable onPress={() => setSheet(true)} style={styles.addBtn} testID="add-cash-button"><Ionicons name="add" size={22} color="#fff" /></Pressable>} />
       <View style={{ padding: SP.lg, gap: SP.sm }}>
+        {isKasir && (
+          <AppText style={{ color: C.muted, fontSize: 12, marginBottom: 2 }}>
+            Sebagai kasir, kamu hanya bisa melihat catatan kas hari ini.
+          </AppText>
+        )}
         <View style={{ flexDirection: "row", gap: SP.sm }}>
-          <Card style={{ flex: 1 }}><AppText style={{ color: C.muted, fontSize: 12 }}>Masuk</AppText><AppText weight="bold" style={{ color: C.success, fontSize: 16 }}>{rupiah(masuk)}</AppText></Card>
-          <Card style={{ flex: 1 }}><AppText style={{ color: C.muted, fontSize: 12 }}>Keluar</AppText><AppText weight="bold" style={{ color: C.danger, fontSize: 16 }}>{rupiah(keluar)}</AppText></Card>
+          <Card style={{ flex: 1 }}><AppText style={{ color: C.muted, fontSize: 12 }}>Masuk ({periodLabel})</AppText><AppText weight="bold" style={{ color: C.success, fontSize: 16 }}>{rupiah(masuk)}</AppText></Card>
+          <Card style={{ flex: 1 }}><AppText style={{ color: C.muted, fontSize: 12 }}>Keluar ({periodLabel})</AppText><AppText weight="bold" style={{ color: C.danger, fontSize: 16 }}>{rupiah(keluar)}</AppText></Card>
         </View>
-        <Card><AppText style={{ color: C.muted, fontSize: 12 }}>Saldo (masuk − keluar)</AppText><AppText weight="extrabold" style={{ fontSize: 22 }}>{rupiah(masuk - keluar)}</AppText></Card>
+        <Card><AppText style={{ color: C.muted, fontSize: 12 }}>Saldo {periodLabel} (masuk − keluar)</AppText><AppText weight="extrabold" style={{ fontSize: 22 }}>{rupiah(masuk - keluar)}</AppText></Card>
       </View>
       {loading ? <View style={styles.center}><ActivityIndicator color={C.brand} /></View> : (
         <FlatList data={list} keyExtractor={(k) => k.id}

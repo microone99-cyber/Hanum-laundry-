@@ -10,7 +10,7 @@ type Item = { label: string; sub: string; icon: keyof typeof Ionicons.glyphMap; 
 
 const ITEMS: Item[] = [
   { label: "Pengeluaran", sub: "Biaya operasional", icon: "wallet", route: "/expenses", color: C.danger, roles: ["owner"] },
-  { label: "Kas / Laci", sub: "Buku kas masuk & keluar", icon: "cash", route: "/cash", color: C.success, roles: ["owner"] },
+  { label: "Kas / Laci", sub: "Buku kas masuk & keluar", icon: "cash", route: "/cash", color: C.success, roles: ["owner", "kasir"] },
   { label: "Laporan", sub: "Omzet, pengeluaran, laba", icon: "bar-chart", route: "/reports", color: C.brand, roles: ["owner"] },
   { label: "Layanan & Tarif", sub: "Kelola paket & harga", icon: "pricetags", route: "/services-manage", color: C.accent, roles: ["owner"] },
   { label: "Pengguna", sub: "Kelola peran akun", icon: "key", route: "/users", color: C.role_owner, roles: ["owner"] },
