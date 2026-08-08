@@ -1,16 +1,16 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView } from "react-native";
 import { Redirect, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
-import { AppText, Card, Button, Field, StatusPill, EmptyState } from "@/src/components/ui";
+import { AppText, Card, Button, Field, StatusPill, EmptyState, Chip } from "@/src/components/ui";
 import { Header } from "@/src/components/Header";
 import { Sheet } from "@/src/components/Sheet";
 import { rupiah, tglID } from "@/src/format";
 import { C, SP, R, F } from "@/src/theme";
 
-type CartItem = { id: string; nama: string; harga: number; satuan: string };
+type CartItem = { id: string; nama: string; harga: number; satuan: string; kategori: string };
 
 export default function Portal() {
   const { user, loading: authLoading, logout, isStaff } = useAuth();
@@ -24,6 +24,8 @@ export default function Portal() {
   const [busy, setBusy] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [catatan, setCatatan] = useState("");
+  const [antar, setAntar] = useState<"jemput" | "antar" | null>(null);
+  const [cat, setCat] = useState("Semua");
 
   const load = useCallback(async () => {
     try {
@@ -37,6 +39,9 @@ export default function Portal() {
   if (authLoading) return null;
   if (!user) return <Redirect href="/login" />;
   if (isStaff) return <Redirect href="/(staff)/dashboard" />;
+
+  const categories = useMemo(() => ["Semua", ...Array.from(new Set(services.map((s) => s.kategori)))], [services]);
+  const filteredServices = cat === "Semua" ? services : services.filter((s) => s.kategori === cat);
 
   const claim = async () => {
     if (!kode.trim()) return;
@@ -52,7 +57,7 @@ export default function Portal() {
     setCart((c) => {
       const exists = c.find((i) => i.id === s.id);
       if (exists) return c.filter((i) => i.id !== s.id);
-      return [...c, { id: s.id, nama: s.nama, harga: s.harga, satuan: s.satuan }];
+      return [...c, { id: s.id, nama: s.nama, harga: s.harga, satuan: s.satuan, kategori: s.kategori }];
     });
   };
 
@@ -60,29 +65,21 @@ export default function Portal() {
     if (cart.length === 0) return;
     setBusy(true);
     try {
-      // kirim satu per satu atau sebagai multi-item tergantung backend
-      // pakai item pertama sebagai paket utama, sisanya di catatan
-      const paketUtama = cart[0];
-      const catatanFull = [
-        cart.length > 1 ? "Paket: " + cart.map((i) => i.nama).join(", ") : "",
-        catatan,
-      ].filter(Boolean).join(" | ");
-
+      const antarInfo = antar === "jemput" ? "[Minta Dijemput] " : antar === "antar" ? "[Minta Diantar] " : "";
+      const paketNama = cart.map((i) => i.nama).join(" + ");
+      const catatanFull = [antarInfo + paketNama, catatan].filter(Boolean).join(" | ");
       await api.post("/orders/customer", {
-        paket: paketUtama.nama,
-        harga: paketUtama.harga,
+        paket: cart[0].nama,
+        harga: cart[0].harga,
         catatan: catatanFull,
       });
       setOrderSheet(false);
-      setCart([]);
-      setCatatan("");
+      setCart([]); setCatatan(""); setAntar(null); setCat("Semua");
       load();
     } finally { setBusy(false); }
   };
 
   const cancel = async (id: string) => { await api.post(`/orders/${id}/cancel`); load(); };
-
-  const totalKeranjang = cart.reduce((a, i) => a + i.harga, 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.surface }}>
@@ -90,8 +87,9 @@ export default function Portal() {
         right={<Pressable onPress={logout} hitSlop={8} testID="portal-logout"><Ionicons name="log-out-outline" size={24} color={C.danger} /></Pressable>} />
       <View style={{ flexDirection: "row", gap: SP.sm, padding: SP.lg, paddingBottom: SP.sm }}>
         <Button title="Klaim Nota" variant="outline" icon="ticket-outline" onPress={() => { setMsg(""); setClaimSheet(true); }} style={{ flex: 1 }} testID="open-claim" />
-        <Button title="Pesan Laundry" icon="add" onPress={() => { setCart([]); setCatatan(""); setOrderSheet(true); }} style={{ flex: 1 }} testID="open-pesan" />
+        <Button title="Pesan Laundry" icon="add" onPress={() => { setCart([]); setCatatan(""); setAntar(null); setCat("Semua"); setOrderSheet(true); }} style={{ flex: 1 }} testID="open-pesan" />
       </View>
+
       {loading ? <View style={styles.center}><ActivityIndicator color={C.brand} /></View> : (
         <FlatList data={list} keyExtractor={(o) => o.id}
           contentContainerStyle={{ paddingHorizontal: SP.lg, paddingBottom: SP.xxl, gap: SP.sm }}
@@ -125,16 +123,43 @@ export default function Portal() {
         </View>
       </Sheet>
 
-      {/* Sheet Pesan — dengan keranjang */}
+      {/* Sheet Pesan — dengan keranjang + kategori */}
       <Sheet visible={orderSheet} onClose={() => setOrderSheet(false)} title="Pesan Laundry" testID="pesan-sheet">
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <AppText style={{ color: C.muted, marginBottom: SP.md }}>
-            Pilih satu atau lebih layanan. Total dihitung petugas saat ditimbang.
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+          {/* Antar jemput */}
+          <AppText weight="semibold" style={{ fontSize: 14, marginBottom: SP.sm }}>Antar jemput?</AppText>
+          <View style={{ flexDirection: "row", gap: SP.sm, marginBottom: SP.md }}>
+            <Pressable
+              onPress={() => setAntar(antar === "jemput" ? null : "jemput")}
+              style={[styles.antarBtn, antar === "jemput" && styles.antarBtnActive]}
+            >
+              <AppText style={{ fontSize: 13, color: antar === "jemput" ? C.brand : C.ink }}>🛵 Minta Dijemput</AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => setAntar(antar === "antar" ? null : "antar")}
+              style={[styles.antarBtn, antar === "antar" && styles.antarBtnActive]}
+            >
+              <AppText style={{ fontSize: 13, color: antar === "antar" ? C.brand : C.ink }}>📦 Minta Diantar</AppText>
+            </Pressable>
+          </View>
+
+          {/* Info */}
+          <AppText style={{ color: C.muted, fontSize: 13, marginBottom: SP.md, lineHeight: 19 }}>
+            Geser kategori di bawah untuk lihat paket lainnya.{"\n"}
+            Cucian kiloan dihitung petugas saat ditimbang; item satuan (pcs) langsung pasti harganya.
           </AppText>
+
+          {/* Filter kategori horizontal */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SP.sm, paddingBottom: SP.sm }} style={{ marginBottom: SP.md }}>
+            {categories.map((c) => (
+              <Chip key={c} label={c} active={c === cat} onPress={() => setCat(c)} testID={`cat-${c}`} />
+            ))}
+          </ScrollView>
 
           {/* Daftar layanan */}
           <View style={{ gap: SP.sm }}>
-            {services.map((s) => {
+            {filteredServices.map((s) => {
               const inCart = cart.some((i) => i.id === s.id);
               return (
                 <Pressable key={s.id} onPress={() => toggleCart(s)} testID={`pesan-${s.id}`}>
@@ -153,9 +178,9 @@ export default function Portal() {
           {/* Keranjang — muncul kalau ada item */}
           {cart.length > 0 && (
             <View style={{ marginTop: SP.lg }}>
-              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: SP.sm }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: SP.sm, marginBottom: SP.sm }}>
                 <View style={styles.sectionAccent} />
-                <AppText weight="bold" style={{ fontSize: 14 }}>Pesanan Kamu</AppText>
+                <AppText weight="bold" style={{ fontSize: 14, flex: 1 }}>Pesanan Kamu</AppText>
                 <View style={styles.cartBadge}>
                   <AppText weight="bold" style={{ color: "#fff", fontSize: 11 }}>{cart.length} item</AppText>
                 </View>
@@ -166,17 +191,15 @@ export default function Portal() {
                   <View key={i.id} style={{ flexDirection: "row", alignItems: "center", gap: SP.sm }}>
                     <Ionicons name="checkmark-circle" size={16} color={C.brand} />
                     <AppText style={{ flex: 1, fontSize: 13 }}>{i.nama}</AppText>
-                    <AppText weight="semibold" style={{ fontSize: 13 }}>{rupiah(i.harga)}/{i.satuan}</AppText>
+                    <AppText weight="semibold" style={{ fontSize: 12, color: C.muted }}>{i.satuan === "kg" ? "ditimbang" : rupiah(i.harga)}</AppText>
                   </View>
                 ))}
-                <View style={{ borderTopWidth: 1, borderTopColor: C.brandTint2, paddingTop: SP.sm, flexDirection: "row", justifyContent: "space-between" }}>
-                  <AppText weight="bold" style={{ color: C.muted, fontSize: 12 }}>*Harga pasti setelah ditimbang</AppText>
-                </View>
+                <AppText style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>*Harga kiloan dihitung petugas saat ditimbang</AppText>
               </Card>
 
               <Field
                 label="Catatan (opsional)"
-                placeholder="Misal: jangan pakai pewangi"
+                placeholder="Misal: jangan pakai pewangi, ada noda di baju merah"
                 value={catatan}
                 onChangeText={setCatatan}
                 multiline
@@ -194,6 +217,8 @@ export default function Portal() {
               />
             </View>
           )}
+
+          <View style={{ height: SP.xxl }} />
         </ScrollView>
       </Sheet>
     </View>
@@ -203,12 +228,25 @@ export default function Portal() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   svcRow: { flexDirection: "row", alignItems: "center", gap: SP.md, paddingVertical: SP.md },
-  sectionAccent: { width: 3, height: 16, borderRadius: 99, backgroundColor: C.brand, marginRight: SP.sm },
+  antarBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: SP.sm,
+    borderRadius: R.pill,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    alignItems: "center",
+    backgroundColor: C.panel,
+  },
+  antarBtnActive: {
+    borderColor: C.brand,
+    backgroundColor: C.brandTint,
+  },
+  sectionAccent: { width: 3, height: 16, borderRadius: 99, backgroundColor: C.brand },
   cartBadge: {
     backgroundColor: C.brand,
     borderRadius: 99,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    marginLeft: SP.sm,
   },
 });
