@@ -8,10 +8,11 @@ export const C = {
   border: "#E2E8F0",
   borderStrong: "#CBD5E1",
 
-  brand: "#6366F1",
-  brandDark: "#4F46E5",
-  brandTint: "#E0E7FF",
-  accent: "#0EA5E9",
+  brand: "#0F6E64",
+  brandDark: "#0B544C",
+  brandTint: "#E3F3F1",
+  accent: "#D4A857",
+  accentTint: "#FBF3E3",
 
   success: "#16A34A",
   warning: "#F59E0B",
@@ -38,7 +39,7 @@ export const C = {
 };
 
 export const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 };
-export const R = { sm: 6, md: 12, lg: 16, pill: 999 };
+export const R = { sm: 8, md: 14, lg: 20, pill: 999 };
 
 export const F = {
   regular: "PlusJakartaSans-Regular",
@@ -47,6 +48,31 @@ export const F = {
   bold: "PlusJakartaSans-Bold",
   extrabold: "PlusJakartaSans-ExtraBold",
   mono: "SpaceMono",
+};
+
+// Shadow presets — dipakai di ui.tsx buat Card & Button biar ada depth
+export const SHADOW = {
+  sm: {
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  md: {
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  colored: (color: string) => ({
+    shadowColor: color,
+    shadowOpacity: 0.30,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 5,
+  }),
 };
 
 export const STATUS_LABEL: Record<string, string> = {

@@ -11,7 +11,7 @@ import {
   StyleProp,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { C, SP, R, F, statusColors, STATUS_LABEL, roleColor, ROLE_LABEL } from "@/src/theme";
+import { C, SP, R, F, SHADOW, statusColors, STATUS_LABEL, roleColor, ROLE_LABEL } from "@/src/theme";
 
 export function AppText(props: React.ComponentProps<typeof Text> & { weight?: keyof typeof F }) {
   const { weight = "regular", style, ...rest } = props;
@@ -29,7 +29,7 @@ export function Card({ children, style, testID }: { children: React.ReactNode; s
 export function Pill({ text, fg, bg, testID }: { text: string; fg: string; bg: string; testID?: string }) {
   return (
     <View testID={testID} style={[styles.pill, { backgroundColor: bg }]}>
-      <Text style={{ color: fg, fontSize: 12, fontFamily: F.bold }}>{text}</Text>
+      <Text style={{ color: fg, fontSize: 12, fontFamily: F.bold, letterSpacing: 0.2 }}>{text}</Text>
     </View>
   );
 }
@@ -66,6 +66,7 @@ export function Button({
     variant === "primary" ? C.brand : variant === "danger" ? C.danger : variant === "success" ? C.success : "transparent";
   const fg = variant === "outline" ? C.brand : variant === "ghost" ? C.ink : "#fff";
   const border = variant === "outline" ? C.brand : "transparent";
+  const coloredShadow = variant === "primary" || variant === "danger" || variant === "success";
   return (
     <Pressable
       testID={testID}
@@ -73,7 +74,14 @@ export function Button({
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.btn,
-        { backgroundColor: bg, borderColor: border, borderWidth: variant === "outline" ? 1.5 : 0, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
+        coloredShadow && SHADOW.colored(bg),
+        {
+          backgroundColor: bg,
+          borderColor: border,
+          borderWidth: variant === "outline" ? 1.5 : 0,
+          opacity: disabled ? 0.5 : 1,
+          transform: [{ scale: pressed ? 0.97 : 1 }],
+        },
         style,
       ]}
     >
@@ -82,7 +90,7 @@ export function Button({
       ) : (
         <View style={styles.btnInner}>
           {icon && <Ionicons name={icon} size={18} color={fg} />}
-          <Text style={{ color: fg, fontFamily: F.bold, fontSize: 15 }}>{title}</Text>
+          <Text style={{ color: fg, fontFamily: F.bold, fontSize: 15, letterSpacing: 0.2 }}>{title}</Text>
         </View>
       )}
     </Pressable>
@@ -106,7 +114,7 @@ export function EmptyState({ icon = "file-tray-outline", title, subtitle }: { ic
   return (
     <View style={styles.empty} testID="empty-state">
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={36} color={C.muted} />
+        <Ionicons name={icon} size={34} color={C.brand} />
       </View>
       <AppText weight="bold" style={{ fontSize: 16, marginTop: SP.md }}>{title}</AppText>
       {subtitle ? <AppText style={{ color: C.muted, textAlign: "center", marginTop: 4 }}>{subtitle}</AppText> : null}
@@ -119,7 +127,11 @@ export function Chip({ label, active, onPress, testID }: { label: string; active
     <Pressable
       testID={testID}
       onPress={onPress}
-      style={[styles.chip, { backgroundColor: active ? C.brand : C.panel, borderColor: active ? C.brand : C.border }]}
+      style={[
+        styles.chip,
+        { backgroundColor: active ? C.brand : C.panel, borderColor: active ? C.brand : C.border },
+        active && SHADOW.colored(C.brand),
+      ]}
     >
       <Text style={{ color: active ? "#fff" : C.ink, fontFamily: F.semibold, fontSize: 13 }}>{label}</Text>
     </Pressable>
@@ -133,15 +145,11 @@ const styles = StyleSheet.create({
     padding: SP.lg,
     borderWidth: 1,
     borderColor: C.border,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    ...SHADOW.sm,
   },
   pill: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingHorizontal: 11,
+    paddingVertical: 4,
     borderRadius: R.pill,
     alignSelf: "flex-start",
   },
@@ -151,33 +159,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: 50,
   },
   btnInner: { flexDirection: "row", alignItems: "center", gap: 8 },
   input: {
-    backgroundColor: C.panel,
+    backgroundColor: C.panel2,
     borderRadius: R.md,
     borderWidth: 1,
     borderColor: C.border,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 13,
     fontFamily: F.regular,
     fontSize: 15,
     color: C.ink,
   },
   empty: { alignItems: "center", justifyContent: "center", paddingVertical: SP.xxxl, paddingHorizontal: SP.xl },
   emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: C.panel2,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: C.brandTint,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: C.border,
   },
   chip: {
-    height: 36,
+    height: 38,
     paddingHorizontal: 16,
     borderRadius: R.pill,
     borderWidth: 1,
