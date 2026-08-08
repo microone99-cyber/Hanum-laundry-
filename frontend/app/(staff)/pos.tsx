@@ -136,7 +136,7 @@ export default function POS() {
                 </View>
                 <View style={styles.qtyRow}>
                   <View style={{ flex: 1 }}>
-                    <AppText style={{ color: C.muted, fontSize: 12 }}>{i.satuan === "kg" ? "Berat (kg)" : "Jumlah (pcs)"}</AppText>
+                    <AppText style={{ color: C.muted, fontSize: 12 }}>{i.satuan === "kg" ? "Berat (kg/pcs)" : "Jumlah (kg/pcs)"}</AppText>
                     <View style={styles.stepper}>
                       <Pressable onPress={() => updateQty(i.layanan_id, +(i.qty - (i.satuan === "kg" ? 0.5 : 1)).toFixed(1))} style={styles.stepBtn} testID={`qty-minus-${i.layanan_id}`}><Ionicons name="remove" size={18} color={C.ink} /></Pressable>
                       <TextInput
