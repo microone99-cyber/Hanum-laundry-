@@ -24,20 +24,14 @@ export default function Portal() {
   const [alamatJemput, setAlamatJemput] = useState("");
   const [butuhAntar, setButuhAntar] = useState(false);
   const [alamatAntar, setAlamatAntar] = useState("");
-  const [antarJemputEnabled, setAntarJemputEnabled] = useState(true);
-  const [cat, setCat] = useState<string>("");
-  const [pcsQty, setPcsQty] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     try {
-      const [mine, svc, settings] = await Promise.all([api.get("/orders/mine"), api.get("/services"), api.get("/settings/public")]);
+      const [mine, svc] = await Promise.all([api.get("/orders/mine"), api.get("/services")]);
       setList(mine);
-      const active = svc.filter((s: any) => s.aktif);
-      setServices(active);
-      if (!cat && active.length) setCat(active[0].kategori);
-      setAntarJemputEnabled(!!settings.antar_jemput_enabled);
+      setServices(svc.filter((s: any) => s.aktif));
     } finally { setLoading(false); }
-  }, [cat]);
+  }, []);
   useFocusEffect(useCallback(() => { if (user && !isStaff) load(); }, [load, user, isStaff]));
 
   if (authLoading) return null;
@@ -54,18 +48,17 @@ export default function Portal() {
     } catch (e: any) { setMsg(e.message); } finally { setBusy(false); }
   };
 
-  const pesan = async (s: any, qty: number = 1) => {
+  const pesan = async (s: any) => {
     setBusy(true);
     try {
       await api.post("/orders/customer", {
-        paket: s.nama, harga: s.harga, satuan: s.satuan, qty,
+        paket: s.nama, harga: s.harga, catatan: "",
         butuh_jemput: butuhJemput, alamat_jemput: butuhJemput ? alamatJemput : "",
         butuh_antar: butuhAntar, alamat_antar: butuhAntar ? alamatAntar : "",
       });
       setOrderSheet(false);
       setButuhJemput(false); setAlamatJemput("");
       setButuhAntar(false); setAlamatAntar("");
-      setPcsQty({});
       load();
     } finally { setBusy(false); }
   };
@@ -120,67 +113,29 @@ export default function Portal() {
 
       <Sheet visible={orderSheet} onClose={() => setOrderSheet(false)} title="Pesan Laundry" testID="pesan-sheet">
         <View style={{ gap: SP.sm }}>
-          {antarJemputEnabled && (
-            <>
-              <AppText weight="semibold">Antar jemput?</AppText>
-              <View style={{ flexDirection: "row", gap: SP.sm }}>
-                <Chip label="🛵 Minta Dijemput" active={butuhJemput} onPress={() => setButuhJemput((v) => !v)} testID="toggle-jemput" />
-                <Chip label="📦 Minta Diantar" active={butuhAntar} onPress={() => setButuhAntar((v) => !v)} testID="toggle-antar" />
-              </View>
-              {butuhJemput && (
-                <Field label="Alamat jemput" placeholder="Alamat lengkap untuk dijemput" value={alamatJemput} onChangeText={setAlamatJemput} testID="alamat-jemput-input" />
-              )}
-              {butuhAntar && (
-                <Field label="Alamat antar" placeholder="Alamat lengkap untuk diantar" value={alamatAntar} onChangeText={setAlamatAntar} testID="alamat-antar-input" />
-              )}
-            </>
-          )}
-          <AppText style={{ color: C.muted, marginTop: SP.xs }}>
-            Geser kategori di bawah untuk lihat paket lainnya. Cucian kiloan dihitung petugas saat ditimbang; item satuan (pcs) langsung pasti harganya.
-          </AppText>
-          <View style={{ flexDirection: "row", gap: SP.sm, marginVertical: SP.xs, flexWrap: "wrap" }}>
-            {[...new Set(services.map((s) => s.kategori))].map((c) => (
-              <Chip key={c} label={c} active={c === cat} onPress={() => setCat(c)} testID={`portal-cat-${c}`} />
-            ))}
+          <AppText weight="semibold">Antar jemput?</AppText>
+          <View style={{ flexDirection: "row", gap: SP.sm }}>
+            <Chip label="🛵 Minta Dijemput" active={butuhJemput} onPress={() => setButuhJemput((v) => !v)} testID="toggle-jemput" />
+            <Chip label="📦 Minta Diantar" active={butuhAntar} onPress={() => setButuhAntar((v) => !v)} testID="toggle-antar" />
           </View>
-          {services.filter((s) => s.kategori === cat).map((s) => {
-            if (s.satuan === "pcs") {
-              const qty = pcsQty[s.id] || 1;
-              return (
-                <Card key={s.id} style={{ gap: SP.xs }} testID={`pesan-pcs-${s.id}`}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <View style={{ flex: 1 }}>
-                      <AppText weight="semibold">{s.nama}</AppText>
-                      <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: SP.xs }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: SP.sm }}>
-                      <Pressable onPress={() => setPcsQty((p) => ({ ...p, [s.id]: Math.max(1, qty - 1) }))} style={styles.stepBtn} testID={`pcs-minus-${s.id}`}>
-                        <Ionicons name="remove" size={16} color={C.ink} />
-                      </Pressable>
-                      <AppText weight="semibold" style={{ minWidth: 24, textAlign: "center" }}>{qty}</AppText>
-                      <Pressable onPress={() => setPcsQty((p) => ({ ...p, [s.id]: qty + 1 }))} style={styles.stepBtn} testID={`pcs-plus-${s.id}`}>
-                        <Ionicons name="add" size={16} color={C.ink} />
-                      </Pressable>
-                    </View>
-                    <Button title={`Pesan · ${rupiah(qty * s.harga)}`} onPress={() => pesan(s, qty)} disabled={busy} testID={`pesan-confirm-${s.id}`} />
-                  </View>
-                </Card>
-              );
-            }
-            return (
-              <Pressable key={s.id} onPress={() => pesan(s, 1)} disabled={busy} testID={`pesan-${s.id}`}>
-                <Card style={styles.svcRow}>
-                  <View style={{ flex: 1 }}>
-                    <AppText weight="semibold">{s.nama}</AppText>
-                    <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
-                  </View>
-                  <Ionicons name="add-circle" size={24} color={C.brand} />
-                </Card>
-              </Pressable>
-            );
-          })}
+          {butuhJemput && (
+            <Field label="Alamat jemput" placeholder="Alamat lengkap untuk dijemput" value={alamatJemput} onChangeText={setAlamatJemput} testID="alamat-jemput-input" />
+          )}
+          {butuhAntar && (
+            <Field label="Alamat antar" placeholder="Alamat lengkap untuk diantar" value={alamatAntar} onChangeText={setAlamatAntar} testID="alamat-antar-input" />
+          )}
+          <AppText style={{ color: C.muted, marginTop: SP.xs, marginBottom: SP.xs }}>Pilih paket. Total dihitung petugas saat ditimbang.</AppText>
+          {services.map((s) => (
+            <Pressable key={s.id} onPress={() => pesan(s)} disabled={busy} testID={`pesan-${s.id}`}>
+              <Card style={styles.svcRow}>
+                <View style={{ flex: 1 }}>
+                  <AppText weight="semibold">{s.nama}</AppText>
+                  <AppText style={{ color: C.muted, fontSize: 13 }}>{rupiah(s.harga)} / {s.satuan}</AppText>
+                </View>
+                <Ionicons name="add-circle" size={24} color={C.brand} />
+              </Card>
+            </Pressable>
+          ))}
         </View>
       </Sheet>
     </View>
@@ -190,5 +145,4 @@ export default function Portal() {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   svcRow: { flexDirection: "row", alignItems: "center", gap: SP.md, paddingVertical: SP.md },
-  stepBtn: { width: 30, height: 30, borderRadius: R.sm, backgroundColor: C.panel2, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
 });
