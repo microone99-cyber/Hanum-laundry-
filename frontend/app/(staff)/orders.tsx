@@ -11,15 +11,52 @@ import { rupiah, tglJamID } from "@/src/format";
 import { C, SP, R, F } from "@/src/theme";
 
 // Bunyi "ding-ding" pakai Web Audio API (nggak butuh file suara/asset apapun).
-// Browser modern block audio autoplay sebelum ada interaksi user sekali —
-// begitu kasir sempat tap layar sekali (buka app dsb), suara ini bakal jalan normal.
-function playBeep() {
-  if (Platform.OS === "web") {
+// Browser modern nge-lock AudioContext baru sampai ada interaksi user (klik/tap/keydown)
+// di halaman itu. Dulu tiap playBeep() bikin AudioContext BARU tiap kali dipanggil —
+// context baru itu selalu ke-lock lagi walau context sebelumnya udah pernah di-unlock,
+// jadi notif yang muncul otomatis dari polling (bukan dari klik user) nggak pernah bunyi.
+// Fix: sekarang cuma 1 AudioContext yang dipakai terus-terusan (dibikin sekali), dan
+// otomatis di-unlock begitu user tap PERTAMA KALI di mana pun di halaman ini.
+let sharedAudioCtx: any = null;
+let unlockListenerAttached = false;
+
+function getAudioCtx() {
+  if (Platform.OS !== "web") return null;
+  if (!sharedAudioCtx) {
     try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioCtx();
+      const AudioCtxClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      sharedAudioCtx = new AudioCtxClass();
+    } catch {
+      return null;
+    }
+  }
+  return sharedAudioCtx;
+}
+
+// Dipanggil sekali pas halaman Daftar Pesanan dibuka. Nempelin listener ke tap/klik/keydown
+// PERTAMA di mana pun di halaman — begitu kena, langsung resume() AudioContext-nya.
+function unlockAudioOnFirstInteraction() {
+  if (Platform.OS !== "web" || unlockListenerAttached) return;
+  unlockListenerAttached = true;
+  const unlock = () => {
+    const ctx = getAudioCtx();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+    document.removeEventListener("pointerdown", unlock);
+    document.removeEventListener("keydown", unlock);
+  };
+  document.addEventListener("pointerdown", unlock, { once: true });
+  document.addEventListener("keydown", unlock, { once: true });
+}
+
+function playBeep() {
+  const ctx = getAudioCtx();
+  if (ctx) {
+    try {
       const ding = (freq: number, delay: number, dur: number) => {
         setTimeout(() => {
+          if (ctx.state === "suspended") return; // belum sempat ke-unlock, skip diam-diam
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
           osc.type = "sine";
@@ -102,6 +139,10 @@ export default function Orders() {
       return () => clearInterval(t);
     }, [load])
   );
+
+  useEffect(() => {
+    unlockAudioOnFirstInteraction();
+  }, []);
 
   useEffect(() => {
     if (!newAlert) return;
