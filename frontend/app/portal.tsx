@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, FlatList, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, Linking } from "react-native";
 import { Redirect, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
@@ -27,6 +27,7 @@ export default function Portal() {
   const [butuhAntar, setButuhAntar] = useState(false);
   const [alamatAntar, setAlamatAntar] = useState("");
   const [antarJemputEnabled, setAntarJemputEnabled] = useState(true);
+  const [waKontak, setWaKontak] = useState("");
   const [cat, setCat] = useState<string>("");
   const [pcsQty, setPcsQty] = useState<Record<string, number>>({});
   // Keranjang beneran — dulu tiap tap layanan langsung bikin 1 pesanan terpisah,
@@ -41,6 +42,7 @@ export default function Portal() {
       setServices(active);
       if (!cat && active.length) setCat(active[0].kategori);
       setAntarJemputEnabled(!!settings.antar_jemput_enabled);
+      setWaKontak(settings.wa_kontak || "");
     } finally { setLoading(false); }
   }, [cat]);
   useFocusEffect(useCallback(() => { if (user && !isStaff) load(); }, [load, user, isStaff]));
@@ -95,6 +97,13 @@ export default function Portal() {
 
   const cancel = async (id: string) => { await api.post(`/orders/${id}/cancel`); load(); };
 
+  const chatWaKasir = () => {
+    const nomor = waKontak.replace(/[^0-9]/g, "");
+    if (!nomor) return;
+    const pesan = `Halo, saya ${user.nama} mau tanya soal jemput/antar cucian.`;
+    Linking.openURL(`https://wa.me/${nomor}?text=${encodeURIComponent(pesan)}`);
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: C.surface }}>
       <Header title="Laundry Saya" subtitle={user.nama}
@@ -103,6 +112,17 @@ export default function Portal() {
         <Button title="Klaim Nota" variant="outline" icon="ticket-outline" onPress={() => { setMsg(""); setClaimSheet(true); }} style={{ flex: 1 }} testID="open-claim" />
         <Button title="Pesan Laundry" icon="add" onPress={() => setOrderSheet(true)} style={{ flex: 1 }} testID="open-pesan" />
       </View>
+      {waKontak ? (
+        <View style={{ paddingHorizontal: SP.lg, paddingBottom: SP.sm }}>
+          <Button
+            title="Chat WA Kasir/Driver"
+            variant="success"
+            icon="logo-whatsapp"
+            onPress={chatWaKasir}
+            testID="portal-chat-wa"
+          />
+        </View>
+      ) : null}
       {loading ? <View style={styles.center}><ActivityIndicator color={C.brand} /></View> : (
         <FlatList data={list} keyExtractor={(o) => o.id}
           contentContainerStyle={{ paddingHorizontal: SP.lg, paddingBottom: SP.xxl, gap: SP.sm }}

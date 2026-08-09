@@ -832,7 +832,10 @@ async def get_settings_doc() -> dict:
 @api_router.get("/settings/public")
 async def settings_public():
     doc = await get_settings_doc()
-    return {"antar_jemput_enabled": doc.get("antar_jemput_enabled", True)}
+    return {
+        "antar_jemput_enabled": doc.get("antar_jemput_enabled", True),
+        "wa_kontak": doc.get("wa_kontak", ""),
+    }
 
 
 @api_router.get("/settings")
