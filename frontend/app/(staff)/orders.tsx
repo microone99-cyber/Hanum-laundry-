@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, Linking } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View, FlatList, StyleSheet, Pressable, ActivityIndicator, ScrollView, Linking, Platform, Vibration } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/api";
@@ -9,6 +9,40 @@ import { Header } from "@/src/components/Header";
 import { Sheet } from "@/src/components/Sheet";
 import { rupiah, tglJamID } from "@/src/format";
 import { C, SP, R, F } from "@/src/theme";
+
+// Bunyi "ding-ding" pakai Web Audio API (nggak butuh file suara/asset apapun).
+// Browser modern block audio autoplay sebelum ada interaksi user sekali —
+// begitu kasir sempat tap layar sekali (buka app dsb), suara ini bakal jalan normal.
+function playBeep() {
+  if (Platform.OS === "web") {
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      const ding = (freq: number, delay: number, dur: number) => {
+        setTimeout(() => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + dur);
+        }, delay);
+      };
+      ding(880, 0, 0.4);
+      ding(1175, 220, 0.35);
+    } catch {}
+  }
+  try {
+    Vibration.vibrate(Platform.OS === "ios" ? [0, 200, 100, 200] : [0, 300, 150, 300]);
+  } catch {}
+}
+
+const POLL_MS = 10000;
 
 const FILTERS = [
   { v: "", l: "Semua" },
@@ -31,16 +65,49 @@ export default function Orders() {
   const [sel, setSel] = useState<any>(null);
   const [timbangVals, setTimbangVals] = useState<Record<number, TimbangVal>>({});
   const [busy, setBusy] = useState(false);
+  const [newAlert, setNewAlert] = useState<string>("");
 
-  const load = useCallback(async () => {
+  const seenIds = useRef<Set<string> | null>(null); // null = belum pernah load (jangan alert di load pertama)
+
+  const load = useCallback(async (silent = false) => {
     try {
-      setList(await api.get("/orders"));
+      const fresh = await api.get("/orders");
+      if (seenIds.current) {
+        const baruMasuk = fresh.filter((o: any) => !seenIds.current!.has(o.id));
+        if (baruMasuk.length > 0) {
+          playBeep();
+          setNewAlert(
+            baruMasuk.length === 1
+              ? `🔔 Pesanan baru: ${baruMasuk[0].nomor_invoice}`
+              : `🔔 ${baruMasuk.length} pesanan baru masuk`
+          );
+        }
+      }
+      seenIds.current = new Set(fresh.map((o: any) => o.id));
+      setList(fresh);
+    } catch {
+      // silent: gagal fetch pas polling background gak perlu ganggu tampilan
+      if (!silent) throw new Error("Gagal memuat pesanan");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Auto-refresh tiap 10 detik SELAMA halaman ini kebuka di layar depan.
+  // Begitu pindah tab/halaman lain, polling berhenti (biar gak boros baterai/data).
+  useFocusEffect(
+    useCallback(() => {
+      load();
+      const t = setInterval(() => load(true), POLL_MS);
+      return () => clearInterval(t);
+    }, [load])
+  );
+
+  useEffect(() => {
+    if (!newAlert) return;
+    const t = setTimeout(() => setNewAlert(""), 5000);
+    return () => clearTimeout(t);
+  }, [newAlert]);
 
   const openDetail = (o: any) => {
     setSel(o);
@@ -112,6 +179,15 @@ export default function Orders() {
   return (
     <View style={{ flex: 1, backgroundColor: C.surface }}>
       <Header title="Daftar Pesanan" subtitle={`${list.length} total`} />
+
+      {newAlert ? (
+        <Pressable onPress={() => setNewAlert("")} style={styles.alertBanner} testID="new-order-alert">
+          <Ionicons name="notifications" size={18} color="#fff" />
+          <AppText weight="bold" style={{ color: "#fff", flex: 1 }}>{newAlert}</AppText>
+          <Ionicons name="close" size={18} color="#fff" />
+        </Pressable>
+      ) : null}
+
       <View style={styles.toolbar}>
         <Field placeholder="Cari invoice / nama" value={q} onChangeText={setQ} testID="orders-search" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SP.sm, paddingVertical: SP.sm }}>
@@ -265,6 +341,11 @@ function Row({ k, v, bold, mono }: { k: string; v: string; bold?: boolean; mono?
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  alertBanner: {
+    flexDirection: "row", alignItems: "center", gap: SP.sm,
+    backgroundColor: C.brand, marginHorizontal: SP.lg, marginTop: SP.sm,
+    padding: SP.md, borderRadius: R.md,
+  },
   toolbar: { paddingHorizontal: SP.lg, paddingTop: SP.sm, backgroundColor: C.panel, borderBottomWidth: 1, borderBottomColor: C.border, paddingBottom: SP.xs },
   actGrid: { flexDirection: "row", gap: SP.sm },
   actBtn: { flex: 1, paddingHorizontal: 4 },
